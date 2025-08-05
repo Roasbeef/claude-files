@@ -12,52 +12,65 @@ The architecture leverages Claude Code's ability to spawn parallel sub-agents, e
 
 ```mermaid
 graph TB
-    subgraph "Claude Code Core"
-        Main[Main Claude Instance]
-        Tools[Built-in Tools<br/>Read, Write, Bash, etc.]
+    %% Core System
+    Main[Claude Code Core]
+    
+    %% Built-in Tools
+    subgraph Tools["Built-in Tools"]
+        direction LR
+        T1[Read/Write]
+        T2[Bash]
+        T3[Search]
     end
     
-    subgraph "Custom Extensions"
-        subgraph "Sub-Agents"
-            AA[Architecture Archaeologist<br/>Deep code analysis]
-            CR[Code Reviewer<br/>PR and code review]
-            SA[Security Auditor<br/>Vulnerability analysis]
-        end
-        
-        subgraph "Commands"
-            IC[Incremental Commit<br/>Atomic git commits]
-            PR[Pre-PR Review<br/>Pre-flight checks]
-            CD[Code Deep Dive<br/>Exploration tasks]
-            BR[Batch Review<br/>Multi-file review]
-        end
-        
-        subgraph "Hooks"
-            UT[Ultrathink Hook<br/>Enhanced reasoning trigger]
-            NH[Notification Hook<br/>Audio/visual alerts]
-            SH[Stop Hook<br/>Task completion alerts]
-            SSH[Subagent Stop Hook<br/>Subagent completion]
-        end
+    %% Sub-Agents Layer
+    subgraph Agents["Specialized Sub-Agents"]
+        direction LR
+        AA[Architecture<br/>Archaeologist]
+        CR[Code<br/>Reviewer]
+        SA[Security<br/>Auditor]
     end
     
+    %% Commands Layer
+    subgraph Commands["Custom Commands"]
+        direction LR
+        IC[Incremental<br/>Commit]
+        PR[Pre-PR<br/>Review]
+        CD[Code<br/>Deep Dive]
+        BR[Batch<br/>Review]
+    end
+    
+    %% Hooks System
+    subgraph Hooks["Event Hooks"]
+        direction LR
+        UT[Ultrathink<br/>-u flag]
+        NH[Notifications]
+        SH[Stop Alerts]
+    end
+    
+    %% Connections - organized to minimize crossings
     Main --> Tools
-    Main --> AA
-    Main --> CR
-    Main --> SA
-    Main --> IC
-    Main --> PR
-    Main --> CD
-    Main --> BR
+    Main ==> Agents
+    Main ==> Commands
     
-    UT -.->|Modifies prompt| Main
-    Main -.->|Triggers| NH
-    Main -.->|On completion| SH
-    AA & CR & SA -.->|On completion| SSH
+    %% Hook interactions
+    UT -.->|enhances| Main
+    Main -.->|triggers| NH
+    Main -.->|triggers| SH
+    Agents -.->|completion| SH
     
-    style Main fill:#f9f,stroke:#333,stroke-width:4px
-    style AA fill:#bbf,stroke:#333,stroke-width:2px
-    style CR fill:#bbf,stroke:#333,stroke-width:2px
-    style SA fill:#bbf,stroke:#333,stroke-width:2px
-    style UT fill:#fbb,stroke:#333,stroke-width:2px
+    %% Styling
+    classDef core fill:#e1bee7,stroke:#4a148c,stroke-width:3px,color:#000
+    classDef agents fill:#c5cae9,stroke:#1a237e,stroke-width:2px,color:#000
+    classDef commands fill:#b2dfdb,stroke:#004d40,stroke-width:2px,color:#000
+    classDef hooks fill:#ffccbc,stroke:#bf360c,stroke-width:2px,color:#000
+    classDef tools fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
+    
+    class Main core
+    class AA,CR,SA agents
+    class IC,PR,CD,BR commands
+    class UT,NH,SH hooks
+    class T1,T2,T3 tools
 ```
 
 ## Components
