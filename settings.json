@@ -1,0 +1,51 @@
+{
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Submarine.aiff 'Claude has a notification for you'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Ping.aiff 'Claude has finished responding'"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Pop.aiff 'Subagent task completed'"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/roasbeef/.claude/hooks/ultrathink_hook.py"
+          }
+        ]
+      }
+    ]
+  },
+  "feedbackSurveyState": {
+    "lastShownTime": 1753983872081
+  }
+}
