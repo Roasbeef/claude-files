@@ -27,6 +27,7 @@ graph TB
     subgraph Agents["Specialized Sub-Agents"]
         direction LR
         AA[Architecture<br/>Archaeologist]
+        CS[Code<br/>Scout]
         CR[Code<br/>Reviewer]
         SA[Security<br/>Auditor]
     end
@@ -37,6 +38,7 @@ graph TB
         IC[Incremental<br/>Commit]
         PR[Pre-PR<br/>Review]
         CD[Code<br/>Deep Dive]
+        QD[Quick<br/>Dive]
         BR[Batch<br/>Review]
     end
     
@@ -67,8 +69,8 @@ graph TB
     classDef tools fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
     
     class Main core
-    class AA,CR,SA agents
-    class IC,PR,CD,BR commands
+    class AA,CS,CR,SA agents
+    class IC,PR,CD,QD,BR commands
     class UT,NH,SH hooks
     class T1,T2,T3 tools
 ```
@@ -77,9 +79,11 @@ graph TB
 
 ### Sub-Agents
 
-The configuration includes three specialized sub-agents, each designed for specific analytical tasks. These agents operate in separate context windows, allowing them to perform deep analysis without consuming the main conversation's context budget.
+The configuration includes four specialized sub-agents, each designed for specific analytical tasks. These agents operate in separate context windows, allowing them to perform deep analysis without consuming the main conversation's context budget.
 
 The **Architecture Archaeologist** (`agents/architecture-archaeologist.md`) serves as your codebase cartographer. When invoked, it launches multiple parallel investigations to analyze different aspects of your code simultaneously. It excels at generating comprehensive documentation with Mermaid diagrams, tracing call graphs, identifying architectural patterns, and synthesizing findings into cohesive reports. This agent is particularly valuable when onboarding new team members or documenting legacy systems.
+
+The **Code Scout** (`agents/code-scout.md`) is the speed-focused counterpart to the Architecture Archaeologist. When you need quick answers about specific code areas without waiting for comprehensive analysis, the Code Scout delivers targeted insights in 2-3 minutes. It operates with strict constraints: analyzing a maximum of 10 files, producing summaries under 1000 words, and focusing only on what's necessary to answer your specific question. This agent is ideal for debugging sessions, quick code navigation, or understanding specific flows without the overhead of deep architectural analysis.
 
 The **Code Reviewer** (`agents/code-reviewer.md`) specializes in examining pull requests and code changes with the scrutiny of an experienced engineer. It analyzes not just the code itself but also the surrounding context, checking for consistency with existing patterns, identifying potential bugs, and suggesting improvements. The agent understands the nuances of distributed systems and can spot subtle issues that automated linters might miss.
 
@@ -93,7 +97,7 @@ The **Incremental Commit** command (`commands/incremental-commit.md`) transforms
 
 The **Pre-PR Review** command (`commands/pre-pr-review.md`) acts as your personal code reviewer before you open a pull request. It checks for common issues, ensures tests pass, verifies documentation is updated, and provides a checklist of items to address. This preemptive review catches issues early, reducing review cycles and improving code quality.
 
-Additional commands include **Code Deep Dive** for exploration tasks, **Batch Review** for analyzing multiple files simultaneously, **Security Audit** for focused security analysis, and **Fuzz Test** for generating test cases that explore edge conditions.
+Additional commands include **Code Deep Dive** for comprehensive exploration tasks, **Quick Dive** for fast targeted analysis (2-3 minutes using the Code Scout agent), **Batch Review** for analyzing multiple files simultaneously, **Security Audit** for focused security analysis, and **Fuzz Test** for generating test cases that explore edge conditions. The Quick Dive command (`commands/quick-dive.md`) is particularly useful when you need immediate answers about specific code functionality without the overhead of a full architectural analysis.
 
 ### Hooks System
 
@@ -130,6 +134,26 @@ Review and customize the `settings.json` file to match your preferences. Pay par
 Once configured, these extensions integrate seamlessly into your Claude Code workflow. To use a sub-agent, you can either explicitly request it or let Claude automatically delegate based on the task. For instance, saying "Use the architecture archaeologist to analyze the payment processing system" will invoke the specialized agent for deep analysis.
 
 Commands are triggered by mentioning them in your request. Saying "Help me create incremental commits for these changes" will activate the incremental commit workflow. Claude will analyze your changes, group them logically, and create atomic commits with detailed messages.
+
+### Choosing Between Quick Dive and Deep Dive
+
+The configuration offers two complementary approaches for code analysis:
+
+**Use Quick Dive (`/quick-dive`) when:**
+- You need an answer in 2-3 minutes
+- Your question is specific and focused ("How does X work?")
+- You're debugging and need to understand a particular flow
+- You want to quickly navigate to relevant code
+- Time is more important than exhaustiveness
+
+**Use Code Deep Dive (`/code-deep-dive`) when:**
+- You need comprehensive documentation
+- You're analyzing complex multi-system interactions
+- You're onboarding team members to a codebase
+- You want detailed architectural diagrams
+- Thoroughness is more important than speed
+
+For example, `/quick-dive How does user authentication work?` will give you a focused answer in minutes, while `/code-deep-dive Analyze the entire authentication and authorization architecture` will provide comprehensive documentation with multiple diagrams and reports.
 
 The ultrathink hook activates when you end your message with `-u`. This is particularly useful for complex problems where you want Claude to engage in deeper reasoning. For example, "Explain how this distributed lock mechanism prevents race conditions -u" will trigger enhanced analysis mode.
 
