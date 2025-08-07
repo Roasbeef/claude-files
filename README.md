@@ -30,6 +30,8 @@ graph TB
         CS[Code<br/>Scout]
         CR[Code<br/>Reviewer]
         SA[Security<br/>Auditor]
+        TE[Test<br/>Engineer]
+        DD[Documentation<br/>Double-Checker]
     end
     
     %% Commands Layer
@@ -39,7 +41,9 @@ graph TB
         PR[Pre-PR<br/>Review]
         CD[Code<br/>Deep Dive]
         QD[Quick<br/>Dive]
+        TF[Test<br/>Forge]
         BR[Batch<br/>Review]
+        DC[Doc<br/>Check]
     end
     
     %% Hooks System
@@ -69,8 +73,8 @@ graph TB
     classDef tools fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
     
     class Main core
-    class AA,CS,CR,SA agents
-    class IC,PR,CD,QD,BR commands
+    class AA,CS,CR,SA,TE,DD agents
+    class IC,PR,CD,QD,TF,BR,DC commands
     class UT,NH,SH hooks
     class T1,T2,T3 tools
 ```
@@ -79,7 +83,7 @@ graph TB
 
 ### Sub-Agents
 
-The configuration includes four specialized sub-agents, each designed for specific analytical tasks. These agents operate in separate context windows, allowing them to perform deep analysis without consuming the main conversation's context budget.
+The configuration includes six specialized sub-agents, each designed for specific analytical tasks. These agents operate in separate context windows, allowing them to perform deep analysis without consuming the main conversation's context budget.
 
 The **Architecture Archaeologist** (`agents/architecture-archaeologist.md`) serves as your codebase cartographer. When invoked, it launches multiple parallel investigations to analyze different aspects of your code simultaneously. It excels at generating comprehensive documentation with Mermaid diagrams, tracing call graphs, identifying architectural patterns, and synthesizing findings into cohesive reports. This agent is particularly valuable when onboarding new team members or documenting legacy systems.
 
@@ -89,6 +93,10 @@ The **Code Reviewer** (`agents/code-reviewer.md`) specializes in examining pull 
 
 The **Security Auditor** (`agents/security-auditor.md`) brings a security-first perspective to code analysis. It identifies vulnerabilities, reviews authentication flows, checks for common security antipatterns, and provides actionable recommendations. This agent is essential for maintaining secure coding practices and can be integrated into your development workflow as a pre-commit security check.
 
+The **Test Engineer** (`agents/test-engineer.md`) specializes in comprehensive test generation using advanced techniques. It analyzes code coverage to identify gaps, creates property-based tests using the rapid framework, designs sophisticated fuzz tests that go beyond simple encode/decode, and builds reusable test harnesses for maintainability. The agent can both generate new test suites from scratch and enhance existing tests, using multiple refinement passes to optimize test quality and coverage. It's particularly effective for complex business logic, state machines, and systems requiring high reliability.
+
+The **Documentation Double-Checker** (`agents/documentation-double-checker.md`) ensures documentation accuracy by verifying all claims against the actual codebase. It launches parallel verification agents to check file paths, function signatures, code examples, architectural descriptions, and mermaid diagrams. When discrepancies are found, it automatically generates corrected versions and provides detailed verification reports. This agent is automatically invoked by the Architecture Archaeologist after documentation generation, but can also be used standalone to verify existing documentation.
+
 ### Custom Commands
 
 Commands extend Claude Code with reusable workflows that can be invoked with simple phrases. Each command is a carefully crafted prompt template that guides Claude through specific tasks.
@@ -97,7 +105,7 @@ The **Incremental Commit** command (`commands/incremental-commit.md`) transforms
 
 The **Pre-PR Review** command (`commands/pre-pr-review.md`) acts as your personal code reviewer before you open a pull request. It checks for common issues, ensures tests pass, verifies documentation is updated, and provides a checklist of items to address. This preemptive review catches issues early, reducing review cycles and improving code quality.
 
-Additional commands include **Code Deep Dive** for comprehensive exploration tasks, **Quick Dive** for fast targeted analysis (2-3 minutes using the Code Scout agent), **Batch Review** for analyzing multiple files simultaneously, **Security Audit** for focused security analysis, and **Fuzz Test** for generating test cases that explore edge conditions. The Quick Dive command (`commands/quick-dive.md`) is particularly useful when you need immediate answers about specific code functionality without the overhead of a full architectural analysis.
+Additional commands include **Code Deep Dive** for comprehensive exploration tasks, **Quick Dive** for fast targeted analysis (2-3 minutes using the Code Scout agent), **Test Forge** for advanced test generation with coverage guidance and property-based testing, **Batch Review** for analyzing multiple files simultaneously, **Security Audit** for focused security analysis, **Fuzz Test** for generating test cases that explore edge conditions, and **Doc Check** for verifying documentation accuracy. The Quick Dive command (`commands/quick-dive.md`) is particularly useful when you need immediate answers about specific code functionality without the overhead of a full architectural analysis. The Test Forge command (`commands/test-forge.md`) leverages the Test Engineer agent to create sophisticated test suites that combine property-based testing, advanced fuzzing, and coverage-guided generation. The Doc Check command (`commands/doc-check.md`) can verify an entire documentation folder or specific markdown files, ensuring all technical documentation accurately reflects the codebase.
 
 ### Hooks System
 
@@ -155,6 +163,31 @@ The configuration offers two complementary approaches for code analysis:
 
 For example, `/quick-dive How does user authentication work?` will give you a focused answer in minutes, while `/code-deep-dive Analyze the entire authentication and authorization architecture` will provide comprehensive documentation with multiple diagrams and reports.
 
+### Advanced Test Generation with Test Forge
+
+The Test Forge command revolutionizes test creation by combining multiple advanced testing techniques:
+
+**Use Test Forge (`/test-forge`) to:**
+- Generate comprehensive test suites with coverage guidance
+- Create property-based tests that verify invariants
+- Design advanced fuzz tests for state machines and business logic
+- Build reusable test harnesses for maintainability
+- Enhance existing tests or create new ones from scratch
+
+**Example workflows:**
+```bash
+# Generate tests for a new feature
+/test-forge PaymentProcessor
+
+# Enhance existing tests with property-based testing
+/test-forge BinaryTree.Insert "add property tests"
+
+# Focus on specific testing aspects
+/test-forge ConnectionPool "focus on concurrent operations and race conditions"
+```
+
+The Test Engineer agent will analyze existing tests (if any), identify coverage gaps, and generate sophisticated tests using the rapid property-based testing framework. It performs multiple refinement passes to optimize test quality and ensure comprehensive coverage.
+
 The ultrathink hook activates when you end your message with `-u`. This is particularly useful for complex problems where you want Claude to engage in deeper reasoning. For example, "Explain how this distributed lock mechanism prevents race conditions -u" will trigger enhanced analysis mode.
 
 ## Customization
@@ -168,6 +201,18 @@ Hooks can be any executable program that reads from stdin and writes to stdout. 
 ## Advanced Workflows
 
 The true power of this configuration emerges when components work together. Consider a typical feature development workflow: you might start by using the architecture archaeologist to understand the existing system, implement your changes with Claude's assistance, use the security auditor to check for vulnerabilities, run the pre-PR review command to ensure quality, and finally use the incremental commit command to create a clean git history.
+
+For documentation workflows, the Architecture Archaeologist now automatically invokes the Documentation Double-Checker after generating documentation, ensuring accuracy. You can also use the `/doc-check` command independently to verify existing documentation:
+
+```bash
+# Verify all documentation in a folder
+/doc-check ./docs
+
+# Verify specific files
+/doc-check README.md ARCHITECTURE.md API.md
+```
+
+This creates a virtuous cycle where documentation generation and verification work together to maintain high-quality, accurate technical documentation.
 
 For code reviews, you might invoke the code reviewer agent on a pull request, have it identify issues, then use Claude's main context to implement fixes, with the notification system keeping you informed of progress throughout. The ultrathink mode can be engaged when the reviewer encounters particularly complex logic that requires deeper analysis.
 
