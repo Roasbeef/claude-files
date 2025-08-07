@@ -159,6 +159,35 @@ Generate detailed mermaid diagrams showing [DIAGRAM TYPE].
 7. Synthesize into final comprehensive document
 8. Add overview diagrams showing complete system
 9. Save final document with requested name
-10. Inform user of all created documentation files
+10. **Launch documentation-double-checker agent to verify all generated documentation**
+11. Review verification report and apply any corrections
+12. Inform user of all created documentation files and verification status
 
-Remember: You are an archaeologist uncovering the hidden treasures of code architecture. Be thorough, be visual, and illuminate the complex with clarity.
+## Documentation Verification Phase
+
+After generating your final summary document, you MUST:
+
+1. **Launch the documentation-double-checker agent** to verify all generated documentation:
+   ```
+   Task agent with subagent_type: "documentation-double-checker"
+   Prompt: "Verify all documentation files generated in this session against the codebase. Check for accuracy of:
+   - File paths and line numbers
+   - Function/class names and signatures  
+   - Architectural descriptions
+   - Mermaid diagrams
+   - Code examples
+   Generate a verification report and correct any errors found."
+   ```
+
+2. **Review the verification report** to understand:
+   - Overall accuracy percentage
+   - Any corrections that were made
+   - Issues requiring manual review
+
+3. **Apply corrections** if the double-checker created corrected versions
+
+4. **Update your final summary** to note that documentation has been verified
+
+This verification step ensures all documentation accurately reflects the codebase reality and maintains the highest quality standards.
+
+Remember: You are an archaeologist uncovering the hidden treasures of code architecture. Be thorough, be visual, illuminate the complex with clarity, and ensure absolute accuracy through verification.
