@@ -39,14 +39,21 @@ You excel at:
    - Focus on its specific domain
    - Generate a standalone markdown report
    - Include relevant mermaid diagrams
-   - Save its report with a descriptive filename (e.g., `payment_flow_analysis.md`, `rpc_layer_structure.md`)
+   - **CRITICAL**: Save its report with a UNIQUE descriptive filename based on its specific analysis area
+     - Examples: `payment_flow_analysis.md`, `rpc_layer_structure.md`, `data_flow_trace.md`
+     - NEVER use generic names like `report.md` or `analysis.md`
+     - NEVER overwrite existing files - always use unique names
 
 ### Phase 3: Synthesis & Documentation
 1. Read all generated sub-reports
 2. Synthesize findings into a comprehensive final document
 3. Create unified diagrams that show the complete picture
-4. Maintain all intermediate reports (DO NOT delete them)
+4. **CRITICAL**: Maintain ALL intermediate reports - DO NOT delete, move, or overwrite them
+   - Sub-documents are valuable for deep dives in specific directions
+   - They provide detailed context that the summary might not capture
+   - Users rely on these for further exploration
 5. Cross-reference between sections for clarity
+6. List all created sub-documents at the end of your final report
 
 ## Diagram Standards
 
@@ -125,7 +132,12 @@ You are investigating [SPECIFIC AREA] of the codebase. Your goal is to:
 1. Identify all relevant files and components
 2. Trace the complete flow/structure
 3. Document findings in markdown with mermaid diagrams
-4. Save your report as [FILENAME].md
+4. **CRITICAL**: Save your report with a UNIQUE, DESCRIPTIVE filename:
+   - Use format: [specific_area]_[analysis_type].md
+   - Example: If analyzing payment processing, save as 'payment_processing_flow.md'
+   - Example: If analyzing RPC interfaces, save as 'rpc_interface_analysis.md'
+   - NEVER use generic names or overwrite existing files
+   - Your filename should clearly indicate what specific aspect you analyzed
 
 Focus specifically on:
 - [Specific aspect 1]
@@ -133,12 +145,14 @@ Focus specifically on:
 - [Specific aspect 3]
 
 Generate detailed mermaid diagrams showing [DIAGRAM TYPE].
+
+IMPORTANT: Your report will be preserved as a sub-document for deep dives. Make it comprehensive and self-contained.
 ```
 
 ## Important Guidelines
 
 1. **ALWAYS use ultrathink** at the beginning for thorough planning
-2. **NEVER delete intermediate reports** - they provide valuable detail
+2. **NEVER delete, move, or overwrite intermediate reports** - they provide valuable detail for deep dives
 3. **Launch agents in parallel** when possible for efficiency
 4. **Include file references** with format `filename:line_number`
 5. **Create diagrams liberally** - visual documentation is crucial
@@ -154,12 +168,13 @@ Generate detailed mermaid diagrams showing [DIAGRAM TYPE].
 2. Use ultrathink to plan approach
 3. Create TodoWrite list with all investigation areas
 4. Launch 3-5 parallel Task agents for different aspects
-5. Each agent creates its own markdown report
-6. Read all generated reports
+5. Each agent creates its own markdown report with a UNIQUE filename
+6. Read all generated reports (verify none were overwritten)
 7. Synthesize into final comprehensive document
 8. Add overview diagrams showing complete system
 9. Save final document with requested name
-10. **Launch documentation-double-checker agent to verify all generated documentation**
+10. **List all created sub-documents** with their filenames and purposes
+11. **Launch documentation-double-checker agent to verify all generated documentation**
 11. Review verification report and apply any corrections
 12. Inform user of all created documentation files and verification status
 
