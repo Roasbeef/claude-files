@@ -88,19 +88,35 @@ graph TB
 
 The configuration includes eight specialized sub-agents, each designed for specific analytical tasks. These agents operate in separate context windows, allowing them to perform deep analysis without consuming the main conversation's context budget.
 
+#### Architecture Archaeologist
+
 The **Architecture Archaeologist** (`agents/architecture-archaeologist.md`) serves as your codebase cartographer. When invoked, it launches multiple parallel investigations to analyze different aspects of your code simultaneously. It excels at generating comprehensive documentation with Mermaid diagrams, tracing call graphs, identifying architectural patterns, and synthesizing findings into cohesive reports. This agent is particularly valuable when onboarding new team members or documenting legacy systems.
+
+#### Code Scout
 
 The **Code Scout** (`agents/code-scout.md`) is the speed-focused counterpart to the Architecture Archaeologist. When you need quick answers about specific code areas without waiting for comprehensive analysis, the Code Scout delivers targeted insights in 2-3 minutes. It operates with strict constraints: analyzing a maximum of 10 files, producing summaries under 1000 words, and focusing only on what's necessary to answer your specific question. This agent is ideal for debugging sessions, quick code navigation, or understanding specific flows without the overhead of deep architectural analysis.
 
+#### Code Reviewer
+
 The **Code Reviewer** (`agents/code-reviewer.md`) specializes in examining pull requests and code changes with the scrutiny of an experienced engineer. It analyzes not just the code itself but also the surrounding context, checking for consistency with existing patterns, identifying potential bugs, and suggesting improvements. The agent understands the nuances of distributed systems and can spot subtle issues that automated linters might miss.
+
+#### Security Auditor
 
 The **Security Auditor** (`agents/security-auditor.md`) brings a security-first perspective to code analysis. It identifies vulnerabilities, reviews authentication flows, checks for common security antipatterns, and provides actionable recommendations. This agent is essential for maintaining secure coding practices and can be integrated into your development workflow as a pre-commit security check.
 
+#### Test Engineer
+
 The **Test Engineer** (`agents/test-engineer.md`) specializes in comprehensive test generation using advanced techniques. It analyzes code coverage to identify gaps, creates property-based tests using the rapid framework, designs sophisticated fuzz tests that go beyond simple encode/decode, and builds reusable test harnesses for maintainability. The agent can both generate new test suites from scratch and enhance existing tests, using multiple refinement passes to optimize test quality and coverage. It's particularly effective for complex business logic, state machines, and systems requiring high reliability.
+
+#### Documentation Double-Checker
 
 The **Documentation Double-Checker** (`agents/documentation-double-checker.md`) ensures documentation accuracy by verifying all claims against the actual codebase. It launches parallel verification agents to check file paths, function signatures, code examples, architectural descriptions, and mermaid diagrams. When discrepancies are found, it automatically generates corrected versions and provides detailed verification reports. This agent is automatically invoked by the Architecture Archaeologist after documentation generation, but can also be used standalone to verify existing documentation.
 
+#### Go Debugger
+
 The **Go Debugger** (`agents/go-debugger.md`) provides interactive debugging capabilities for Go programs using Delve (dlv) and tmux. It creates isolated debugging sessions where it can set breakpoints, step through code, inspect variables and goroutines, and analyze program state in real-time. The agent uses sophisticated event-based synchronization with `tmux wait-for` signals and file-based output monitoring to maintain tight control over the debugging session. This eliminates the need for brittle sleep-based timing and provides reliable command execution. It's particularly effective for debugging complex concurrency issues, nil pointer dereferences, and goroutine deadlocks in Go applications.
+
+#### Debug Chronicler
 
 The **Debug Chronicler** (`agents/debug-chronicler.md`) transforms ad-hoc debugging sessions into structured, reusable runbooks. After resolving a bug, this agent analyzes the entire conversation transcript to extract the debugging journey and create comprehensive documentation that helps future developers facing similar issues. It generates structured runbooks with symptom checklists, diagnostic flowcharts using Mermaid diagrams, step-by-step resolution paths, and verification procedures. Each runbook follows a consistent template that makes it easy to quickly identify if you're facing the same issue and provides proven resolution strategies.
 
@@ -108,17 +124,55 @@ The **Debug Chronicler** (`agents/debug-chronicler.md`) transforms ad-hoc debugg
 
 Commands extend Claude Code with reusable workflows that can be invoked with simple phrases. Each command is a carefully crafted prompt template that guides Claude through specific tasks.
 
+#### Incremental Commit
+
 The **Incremental Commit** command (`commands/incremental-commit.md`) transforms the often chaotic process of creating git commits into a structured workflow. Rather than dumping all changes into a single commit, it analyzes your modifications and creates atomic, well-documented commits that tell a coherent story. The command intelligently groups related changes, writes detailed commit messages in natural prose, and ensures each commit represents a logical unit of work.
+
+#### Pre-PR Review
 
 The **Pre-PR Review** command (`commands/pre-pr-review.md`) acts as your personal code reviewer before you open a pull request. It checks for common issues, ensures tests pass, verifies documentation is updated, and provides a checklist of items to address. This preemptive review catches issues early, reducing review cycles and improving code quality.
 
-Additional commands include **Code Deep Dive** for comprehensive exploration tasks, **Quick Dive** for fast targeted analysis (2-3 minutes using the Code Scout agent), **Test Forge** for advanced test generation with coverage guidance and property-based testing, **Batch Review** for analyzing multiple files simultaneously, **Security Audit** for focused security analysis, **Fuzz Test** for generating test cases that explore edge conditions, **Doc Check** for verifying documentation accuracy, and **Chronicle Fix** for converting debugging sessions into reusable runbooks. The Quick Dive command (`commands/quick-dive.md`) is particularly useful when you need immediate answers about specific code functionality without the overhead of a full architectural analysis. The Test Forge command (`commands/test-forge.md`) leverages the Test Engineer agent to create sophisticated test suites that combine property-based testing, advanced fuzzing, and coverage-guided generation. The Doc Check command (`commands/doc-check.md`) can verify an entire documentation folder or specific markdown files, ensuring all technical documentation accurately reflects the codebase. The Chronicle Fix command (`commands/chronicle-fix.md`) invokes the Debug Chronicler agent to analyze the current conversation and create a structured debugging runbook, transforming one-off bug fixes into institutional knowledge that benefits the entire team.
+#### Code Deep Dive
+
+The **Code Deep Dive** command provides comprehensive exploration of complex codebases. It performs exhaustive analysis to understand architectural patterns, dependencies, and system behaviors, producing detailed reports with diagrams and documentation.
+
+#### Quick Dive
+
+The **Quick Dive** command (`commands/quick-dive.md`) is the fast-track alternative for targeted analysis. Using the Code Scout agent, it delivers focused insights in 2-3 minutes. This command is particularly useful when you need immediate answers about specific code functionality without the overhead of a full architectural analysis.
+
+#### Test Forge
+
+The **Test Forge** command (`commands/test-forge.md`) leverages the Test Engineer agent to create sophisticated test suites. It combines property-based testing, advanced fuzzing, and coverage-guided generation to produce comprehensive test coverage that goes beyond simple unit tests.
+
+#### Batch Review
+
+The **Batch Review** command enables analyzing multiple files simultaneously, perfect for reviewing related changes across a codebase or ensuring consistency in implementation patterns across multiple components.
+
+#### Security Audit
+
+The **Security Audit** command provides focused security analysis of code sections, identifying vulnerabilities, checking authentication flows, and suggesting security improvements.
+
+#### Fuzz Test
+
+The **Fuzz Test** command generates test cases that explore edge conditions and unexpected inputs, helping identify bugs that standard testing might miss.
+
+#### Doc Check
+
+The **Doc Check** command (`commands/doc-check.md`) verifies documentation accuracy against the actual codebase. It can verify an entire documentation folder or specific markdown files, ensuring all technical documentation accurately reflects the implementation.
+
+#### Chronicle Fix
+
+The **Chronicle Fix** command (`commands/chronicle-fix.md`) invokes the Debug Chronicler agent to analyze the current conversation and create a structured debugging runbook. This transforms one-off bug fixes into institutional knowledge that benefits the entire team, ensuring that debugging insights are preserved and reusable.
 
 ### Hooks System
 
 The hooks system provides programmatic control over Claude Code's behavior through shell commands that execute at specific lifecycle events. This creates a feedback loop between Claude and your development environment.
 
+#### Ultrathink Hook
+
 The **Ultrathink Hook** (`hooks/ultrathink_hook.py`) implements an innovative prompt modification system. When you append `-u` to your message, it triggers enhanced reasoning mode by adding the "ultrathink" instruction to your prompt. This causes Claude to engage in deeper analysis before responding, particularly useful for complex architectural decisions or debugging challenging issues.
+
+#### Notification System
 
 The **Notification System** uses macOS native features to provide audio and visual feedback. The enhanced notification script (`notify-enhanced.sh`) plays different sounds for different events and displays alerts with contextual information including the current directory and git branch. This keeps you informed of Claude's progress without constantly monitoring the terminal. The system triggers notifications when Claude sends messages, completes responses, or when sub-agents finish their tasks.
 
