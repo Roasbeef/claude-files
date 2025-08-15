@@ -32,6 +32,8 @@ graph TB
         SA[Security<br/>Auditor]
         TE[Test<br/>Engineer]
         DD[Documentation<br/>Double-Checker]
+        GD[Go<br/>Debugger]
+        DC2[Debug<br/>Chronicler]
     end
     
     %% Commands Layer
@@ -44,6 +46,7 @@ graph TB
         TF[Test<br/>Forge]
         BR[Batch<br/>Review]
         DC[Doc<br/>Check]
+        CF[Chronicle<br/>Fix]
     end
     
     %% Hooks System
@@ -73,8 +76,8 @@ graph TB
     classDef tools fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
     
     class Main core
-    class AA,CS,CR,SA,TE,DD agents
-    class IC,PR,CD,QD,TF,BR,DC commands
+    class AA,CS,CR,SA,TE,DD,GD,DC2 agents
+    class IC,PR,CD,QD,TF,BR,DC,CF commands
     class UT,NH,SH hooks
     class T1,T2,T3 tools
 ```
@@ -83,7 +86,7 @@ graph TB
 
 ### Sub-Agents
 
-The configuration includes six specialized sub-agents, each designed for specific analytical tasks. These agents operate in separate context windows, allowing them to perform deep analysis without consuming the main conversation's context budget.
+The configuration includes eight specialized sub-agents, each designed for specific analytical tasks. These agents operate in separate context windows, allowing them to perform deep analysis without consuming the main conversation's context budget.
 
 The **Architecture Archaeologist** (`agents/architecture-archaeologist.md`) serves as your codebase cartographer. When invoked, it launches multiple parallel investigations to analyze different aspects of your code simultaneously. It excels at generating comprehensive documentation with Mermaid diagrams, tracing call graphs, identifying architectural patterns, and synthesizing findings into cohesive reports. This agent is particularly valuable when onboarding new team members or documenting legacy systems.
 
@@ -97,6 +100,10 @@ The **Test Engineer** (`agents/test-engineer.md`) specializes in comprehensive t
 
 The **Documentation Double-Checker** (`agents/documentation-double-checker.md`) ensures documentation accuracy by verifying all claims against the actual codebase. It launches parallel verification agents to check file paths, function signatures, code examples, architectural descriptions, and mermaid diagrams. When discrepancies are found, it automatically generates corrected versions and provides detailed verification reports. This agent is automatically invoked by the Architecture Archaeologist after documentation generation, but can also be used standalone to verify existing documentation.
 
+The **Go Debugger** (`agents/go-debugger.md`) provides interactive debugging capabilities for Go programs using Delve (dlv) and tmux. It creates isolated debugging sessions where it can set breakpoints, step through code, inspect variables and goroutines, and analyze program state in real-time. The agent uses sophisticated event-based synchronization with `tmux wait-for` signals and file-based output monitoring to maintain tight control over the debugging session. This eliminates the need for brittle sleep-based timing and provides reliable command execution. It's particularly effective for debugging complex concurrency issues, nil pointer dereferences, and goroutine deadlocks in Go applications.
+
+The **Debug Chronicler** (`agents/debug-chronicler.md`) transforms ad-hoc debugging sessions into structured, reusable runbooks. After resolving a bug, this agent analyzes the entire conversation transcript to extract the debugging journey and create comprehensive documentation that helps future developers facing similar issues. It generates structured runbooks with symptom checklists, diagnostic flowcharts using Mermaid diagrams, step-by-step resolution paths, and verification procedures. Each runbook follows a consistent template that makes it easy to quickly identify if you're facing the same issue and provides proven resolution strategies.
+
 ### Custom Commands
 
 Commands extend Claude Code with reusable workflows that can be invoked with simple phrases. Each command is a carefully crafted prompt template that guides Claude through specific tasks.
@@ -105,7 +112,7 @@ The **Incremental Commit** command (`commands/incremental-commit.md`) transforms
 
 The **Pre-PR Review** command (`commands/pre-pr-review.md`) acts as your personal code reviewer before you open a pull request. It checks for common issues, ensures tests pass, verifies documentation is updated, and provides a checklist of items to address. This preemptive review catches issues early, reducing review cycles and improving code quality.
 
-Additional commands include **Code Deep Dive** for comprehensive exploration tasks, **Quick Dive** for fast targeted analysis (2-3 minutes using the Code Scout agent), **Test Forge** for advanced test generation with coverage guidance and property-based testing, **Batch Review** for analyzing multiple files simultaneously, **Security Audit** for focused security analysis, **Fuzz Test** for generating test cases that explore edge conditions, and **Doc Check** for verifying documentation accuracy. The Quick Dive command (`commands/quick-dive.md`) is particularly useful when you need immediate answers about specific code functionality without the overhead of a full architectural analysis. The Test Forge command (`commands/test-forge.md`) leverages the Test Engineer agent to create sophisticated test suites that combine property-based testing, advanced fuzzing, and coverage-guided generation. The Doc Check command (`commands/doc-check.md`) can verify an entire documentation folder or specific markdown files, ensuring all technical documentation accurately reflects the codebase.
+Additional commands include **Code Deep Dive** for comprehensive exploration tasks, **Quick Dive** for fast targeted analysis (2-3 minutes using the Code Scout agent), **Test Forge** for advanced test generation with coverage guidance and property-based testing, **Batch Review** for analyzing multiple files simultaneously, **Security Audit** for focused security analysis, **Fuzz Test** for generating test cases that explore edge conditions, **Doc Check** for verifying documentation accuracy, and **Chronicle Fix** for converting debugging sessions into reusable runbooks. The Quick Dive command (`commands/quick-dive.md`) is particularly useful when you need immediate answers about specific code functionality without the overhead of a full architectural analysis. The Test Forge command (`commands/test-forge.md`) leverages the Test Engineer agent to create sophisticated test suites that combine property-based testing, advanced fuzzing, and coverage-guided generation. The Doc Check command (`commands/doc-check.md`) can verify an entire documentation folder or specific markdown files, ensuring all technical documentation accurately reflects the codebase. The Chronicle Fix command (`commands/chronicle-fix.md`) invokes the Debug Chronicler agent to analyze the current conversation and create a structured debugging runbook, transforming one-off bug fixes into institutional knowledge that benefits the entire team.
 
 ### Hooks System
 
@@ -215,6 +222,8 @@ For documentation workflows, the Architecture Archaeologist now automatically in
 This creates a virtuous cycle where documentation generation and verification work together to maintain high-quality, accurate technical documentation.
 
 For code reviews, you might invoke the code reviewer agent on a pull request, have it identify issues, then use Claude's main context to implement fixes, with the notification system keeping you informed of progress throughout. The ultrathink mode can be engaged when the reviewer encounters particularly complex logic that requires deeper analysis.
+
+For debugging workflows, the Go Debugger agent provides a powerful interactive debugging experience. When encountering a bug in Go code, you can invoke the agent to create a tmux debugging session where you can set breakpoints, step through code, and inspect program state in real-time. After successfully resolving the issue, use the `/chronicle-fix` command to have the Debug Chronicler analyze the debugging session and create a structured runbook. This transforms your debugging experience into reusable knowledge that helps the entire team resolve similar issues faster in the future. The combination of interactive debugging and automatic documentation creation ensures that no debugging insight is lost.
 
 ## Performance Considerations
 
