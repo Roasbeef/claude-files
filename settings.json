@@ -1,4 +1,5 @@
 {
+  "model": "claude-opus-4-1-20250805",
   "hooks": {
     "Notification": [
       {
@@ -44,6 +45,10 @@
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "input=$(cat); cwd=\"$(echo \"$input\" | jq -r '.workspace.current_dir')\"; model=\"$(echo \"$input\" | jq -r '.model.display_name')\"; if [ -d \"$cwd/.git\" ]; then cd \"$cwd\" 2>/dev/null && branch=$(git branch --show-current 2>/dev/null); if [ -n \"$branch\" ]; then git_info=\" [$branch]\"; else git_info=\" [detached]\"; fi; changes=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' '); if [ \"$changes\" -gt 0 ]; then git_info=\"$git_info *\"; fi; else git_info=\"\"; fi; printf \"⛰ %s | %s%s | %s\" \"$(whoami)\" \"$(basename \"$cwd\")\" \"$git_info\" \"$model\""
   },
   "feedbackSurveyState": {
     "lastShownTime": 1753983872081
