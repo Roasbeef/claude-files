@@ -8,6 +8,46 @@ Claude Code is Anthropic's AI-powered development assistant that runs directly i
 
 The architecture leverages Claude Code's ability to spawn parallel sub-agents, each with their own context window and specialized expertise. This allows for complex, multi-threaded analysis while preserving the main conversation context. The system also includes automated notifications and a unique "ultrathink" hook that triggers enhanced reasoning for complex tasks.
 
+## Task Management System
+
+A lightweight task management system is integrated into all projects, storing tasks as markdown files in `.tasks/` directories. This enables systematic work tracking, dependency management, and multi-agent collaboration.
+
+### Quick Start
+```bash
+/task-list              # See what needs doing
+/task-next              # Pick highest priority task
+/task-add               # Create new task
+/task-complete fix-auth # Mark task complete
+```
+
+### Task Structure
+Tasks are markdown files with YAML frontmatter containing:
+- **Priority**: P0 (critical) to P3 (low)
+- **Size**: XS (<1hr) to XL (3+ days)
+- **Status**: ready, in_progress, blocked, completed
+- **Dependencies**: blocks/blocked_by relationships
+- **Acceptance Criteria**: Checkboxes for progress tracking
+
+### Key Commands
+| Command | Purpose | Example |
+|---------|---------|---------|
+| `/task-add` | Create new task | `/task-add` |
+| `/task-list` | List tasks with filters | `/task-list --priority=P0` |
+| `/task-next` | Pick next task | `/task-next --size=S` |
+| `/task-deps` | Manage dependencies | `/task-deps add fix-auth --blocked-by=api-update` |
+| `/task-complete` | Complete & archive | `/task-complete fix-auth` |
+
+### Dependency Management
+Tasks can have two types of dependencies:
+- **blocks**: Tasks that depend on this one
+- **blocked_by**: Tasks that must complete first
+
+The system automatically:
+- Prevents starting blocked tasks
+- Suggests tasks that unblock others
+- Detects circular dependencies
+- Shows dependency graphs
+
 ## Architecture
 
 ```mermaid
