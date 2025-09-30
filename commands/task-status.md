@@ -1,10 +1,13 @@
 ---
 name: task-status
 description: Update the status of a task
+argument-hint: <task-id> <status> [--reason=...] [--assignee=...]
 match: always
 ---
 
-Update the status of a task (ready, in_progress, blocked, completed).
+Update the status of a task (ready, in_progress, blocked, completed). Task ID: $1, New status: $2
+
+Arguments: $ARGUMENTS
 
 ## Steps:
 1. Find task by ID (partial match) or shortname

@@ -1,10 +1,13 @@
 ---
 name: task-complete
 description: Mark a task as completed and archive it
+argument-hint: [task-id] [--current] [--no-archive] [--force]
 match: always
 ---
 
-Mark a task as completed and optionally archive it.
+Mark a task as completed and optionally archive it. Task ID (if provided): $1
+
+Arguments: $ARGUMENTS
 
 ## Steps:
 1. Find task by ID (partial match supported) or current in_progress task

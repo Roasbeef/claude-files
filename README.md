@@ -1,52 +1,121 @@
-# Advanced Claude Code Configuration
+# Advanced Claude Code Configuration with Task Management System
 
-This repository contains a sophisticated Claude Code setup that extends the base capabilities with specialized sub-agents, custom commands, and automated hooks. The configuration demonstrates how Claude Code can be transformed from a general-purpose AI assistant into a highly specialized development environment tailored for complex software engineering workflows.
+This repository contains a sophisticated Claude Code setup that extends the base capabilities with specialized sub-agents, custom commands, automated hooks, and a comprehensive task management system. The configuration demonstrates how Claude Code can be transformed from a general-purpose AI assistant into a highly specialized development environment tailored for complex software engineering workflows.
 
 ## Overview
 
-Claude Code is Anthropic's AI-powered development assistant that runs directly in your terminal. While powerful out of the box, its true potential emerges through customization. This configuration showcases an advanced setup that includes three key extension points: specialized sub-agents for deep code analysis, custom commands for common workflows, and hooks that provide real-time feedback and control.
+Claude Code is Anthropic's AI-powered development assistant that runs directly in your terminal. While powerful out of the box, its true potential emerges through customization. This configuration showcases an advanced setup that includes:
+- **Task Management System**: Lightweight, dependency-aware task tracking
+- **Specialized Sub-agents**: Deep code analysis with parallel processing
+- **Custom Commands**: Common workflows and task operations
+- **Automated Hooks**: Real-time feedback and enhanced reasoning
 
-The architecture leverages Claude Code's ability to spawn parallel sub-agents, each with their own context window and specialized expertise. This allows for complex, multi-threaded analysis while preserving the main conversation context. The system also includes automated notifications and a unique "ultrathink" hook that triggers enhanced reasoning for complex tasks.
+The architecture leverages Claude Code's ability to spawn parallel sub-agents, each with their own context window and specialized expertise. This allows for complex, multi-threaded analysis while preserving the main conversation context.
 
 ## Task Management System
 
-A lightweight task management system is integrated into all projects, storing tasks as markdown files in `.tasks/` directories. This enables systematic work tracking, dependency management, and multi-agent collaboration.
+A comprehensive task management system enables systematic work tracking across all projects. Tasks are stored as markdown files with YAML frontmatter in project `.tasks/` directories.
+
+### Features
+- **Dependency Management**: Automatic blocking/unblocking of tasks
+- **Priority-based Selection**: Smart task ordering (P0-P3)
+- **Size Estimation**: XS to XL effort tracking
+- **Multi-agent Support**: Assignee field for collaboration
+- **Shell Integration**: Aliases for quick access
+
+### Directory Structure
+```
+project/
+└── .tasks/
+    ├── active/      # Current tasks (shortname-uuid.md)
+    ├── archive/     # Completed tasks
+    └── templates/   # Task templates
+```
 
 ### Quick Start
+
+#### Shell Setup (Already configured in ~/.zshrc)
 ```bash
-/task-list              # See what needs doing
+# Available aliases:
+tasks           # List tasks in current project
+all-tasks       # Find all projects with tasks
+task-cd         # Navigate to .tasks/active
+task-cat <id>   # View specific task
+task-status     # Quick summary
+
+# Scripts available globally:
+~/.claude/scripts/list-tasks.sh [dir]      # List project tasks
+~/.claude/scripts/list-all-tasks.sh [dir]  # Find all projects
+```
+
+#### Claude Commands
+```bash
+/task-list              # See all tasks with status
 /task-next              # Pick highest priority task
-/task-add               # Create new task
-/task-complete fix-auth # Mark task complete
+/task-add               # Create new task interactively
+/task-view <id>         # View task details
+/task-status <id> <st>  # Update task status
+/task-complete <id>     # Mark complete & archive
+/task-deps <action>     # Manage dependencies
 ```
 
 ### Task Structure
-Tasks are markdown files with YAML frontmatter containing:
-- **Priority**: P0 (critical) to P3 (low)
-- **Size**: XS (<1hr) to XL (3+ days)
-- **Status**: ready, in_progress, blocked, completed
-- **Dependencies**: blocks/blocked_by relationships
-- **Acceptance Criteria**: Checkboxes for progress tracking
 
-### Key Commands
-| Command | Purpose | Example |
-|---------|---------|---------|
-| `/task-add` | Create new task | `/task-add` |
-| `/task-list` | List tasks with filters | `/task-list --priority=P0` |
-| `/task-next` | Pick next task | `/task-next --size=S` |
-| `/task-deps` | Manage dependencies | `/task-deps add fix-auth --blocked-by=api-update` |
-| `/task-complete` | Complete & archive | `/task-complete fix-auth` |
+```yaml
+---
+id: 01999792-af4f-70fb-9deb-dc96846b3c83  # UUIDv7
+shortname: fix-auth-bug
+title: Fix authentication bug in login flow
+priority: P1        # P0=critical, P1=high, P2=medium, P3=low
+size: M            # XS=<1hr, S=1-4hr, M=4-8hr, L=1-3d, XL=3+d
+status: ready      # ready|in_progress|blocked|completed
+tags: [security, auth]
+blocks: [deploy-prod]          # Tasks that depend on this
+blocked_by: [update-api]       # Tasks this depends on
+assignee:
+created_at: 2025-01-29T23:24:00Z
+updated_at: 2025-01-29T23:24:00Z
+---
 
-### Dependency Management
-Tasks can have two types of dependencies:
-- **blocks**: Tasks that depend on this one
-- **blocked_by**: Tasks that must complete first
+# Task: Fix authentication bug in login flow
+
+## Description
+Detailed explanation...
+
+## Acceptance Criteria
+- [ ] Bug reproduced
+- [ ] Fix implemented
+- [ ] Tests added
+
+## Technical Details
+Implementation notes...
+
+## Dependencies
+### Blocks: [deploy-prod]
+### Blocked By: [update-api]
+```
+
+### Dependency System
+
+Tasks track two types of dependencies:
+- **blocks**: Tasks waiting for this one to complete
+- **blocked_by**: Tasks that must complete before this one
 
 The system automatically:
 - Prevents starting blocked tasks
-- Suggests tasks that unblock others
+- Prioritizes tasks that unblock others
 - Detects circular dependencies
-- Shows dependency graphs
+- Shows dependency graphs with `/task-deps graph`
+
+### Task Selection Algorithm
+
+When using `/task-next`, tasks are selected by:
+1. Exclude blocked tasks (unmet dependencies)
+2. Resume any in_progress work
+3. Priority order: P0 > P1 > P2 > P3
+4. Within priority: prefer smaller tasks (quick wins)
+5. Prefer tasks that unblock others
+6. Break ties by creation date (FIFO)
 
 ## Architecture
 

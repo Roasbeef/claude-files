@@ -1,10 +1,13 @@
 ---
 name: task-view
 description: View detailed information about a specific task
+argument-hint: <task-id> [--current] [--raw]
 match: always
 ---
 
-Display full details of a specific task.
+Display full details of a specific task. Task ID or shortname: $1
+
+Arguments: $ARGUMENTS
 
 ## Steps:
 1. Find task by ID (partial match) or shortname

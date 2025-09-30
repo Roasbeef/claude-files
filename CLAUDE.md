@@ -74,3 +74,56 @@ When working on a codebase:
 - Use tags for categorization (e.g., "bug", "feature", "docs")
 - Check dependencies before starting work
 - Keep task descriptions focused and actionable
+
+## Example Task File
+```markdown
+---
+id: 01999792-af4f-70fb-9deb-dc96846b3c83
+shortname: implement-truc-analyzer
+title: Implement concrete TRUC PackageAnalyzer for BIP 431
+priority: P1
+size: L
+status: ready
+tags: [bitcoin, protocol, validation]
+blocks: [implement-ephemeral-analyzer]
+blocked_by: []
+assignee:
+created_at: 2025-01-29T23:24:00Z
+updated_at: 2025-01-29T23:24:00Z
+---
+
+# Task: Implement concrete TRUC PackageAnalyzer for BIP 431
+
+## Description
+Create a concrete implementation of the PackageAnalyzer interface...
+
+## Acceptance Criteria
+- [ ] Implement IsTRUCTransaction to detect v3 transactions
+- [ ] Enforce topology restrictions
+- [ ] Add comprehensive unit tests
+
+## Technical Details
+Implementation notes and approach...
+```
+
+## Integration with Projects
+Each project should have:
+1. A project-specific `CLAUDE.md` describing active tasks
+2. A `.tasks/` directory at the project root
+3. Regular task updates as work progresses
+
+When starting work on any project, first run `/task-list` to see what needs doing.
+
+## Shell Integration
+
+Task management aliases are available in the shell (configured in ~/.zshrc):
+- `tasks` - List tasks in current project
+- `all-tasks` - Find all projects with tasks
+- `task-cd` - Navigate to .tasks/active directory
+- `task-cat <shortname>` - View a specific task file
+- `task-status` - Quick status summary
+
+Scripts in ~/.claude/scripts/:
+- `list-tasks.sh [dir]` - Display tasks for any project
+- `list-all-tasks.sh [dir]` - Find all projects with tasks
+- `task-aliases.sh` - Shell aliases (auto-loaded via .zshrc)

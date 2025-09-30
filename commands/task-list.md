@@ -1,16 +1,31 @@
 ---
 name: task-list
 description: List all tasks with optional filters
+argument-hint: [--status=...] [--priority=P0-P3] [--assignee=...] [--size=XS-XL] [--tag=...] [--all]
 match: always
 ---
 
 List tasks from the project's `.tasks/` directory.
+
+Arguments: $ARGUMENTS
+
+## Implementation:
+Use the shared script: `~/.claude/scripts/list-tasks.sh`
 
 ## Steps:
 1. Check for `.tasks/active/` and `.tasks/archive/` directories
 2. Parse all task markdown files (extract YAML frontmatter)
 3. Apply any filters from parameters
 4. Display in priority/status order
+
+## Script Usage:
+```bash
+# From project root:
+~/.claude/scripts/list-tasks.sh
+
+# From anywhere, specify project:
+~/.claude/scripts/list-tasks.sh /path/to/project
+```
 
 ## Display Format:
 ```

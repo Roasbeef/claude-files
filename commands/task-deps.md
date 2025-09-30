@@ -1,10 +1,13 @@
 ---
 name: task-deps
 description: Manage task dependencies and view dependency graph
+argument-hint: <action> [task-id] [--blocks=id] [--blocked-by=id] [--recursive]
 match: always
 ---
 
-Manage and visualize task dependencies.
+Manage and visualize task dependencies. Action: $1, Task ID: $2
+
+Arguments: $ARGUMENTS
 
 ## Steps:
 1. Load all tasks from `.tasks/active/`

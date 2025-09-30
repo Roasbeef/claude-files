@@ -1,10 +1,13 @@
 ---
 name: task-add
 description: Create a new task with metadata and acceptance criteria
+argument-hint: [task details or empty for interactive mode]
 match: always
 ---
 
 Create a new task in the project's `.tasks/` directory.
+
+Arguments: $ARGUMENTS
 
 ## Steps:
 1. Check if `.tasks/` directory exists, create if not

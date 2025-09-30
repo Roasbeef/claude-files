@@ -1,10 +1,13 @@
 ---
 name: task-next
 description: Pick and start working on the next highest priority task
+argument-hint: [task-id] [--priority=P0-P3] [--size=XS-XL] [--tag=tag] [--force]
 match: always
 ---
 
-Select and begin work on the next appropriate task.
+Select and begin work on the next appropriate task. If task-id is provided as $1, use that specific task. Otherwise, select based on the algorithm below.
+
+Arguments: $ARGUMENTS
 
 ## Steps:
 1. Load all tasks from `.tasks/active/`
