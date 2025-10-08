@@ -47,9 +47,9 @@ Before even looking at the code, ask yourself:
    - Base and head branches
    - File change statistics
 
-2. Create incremental review markdown file:
+2. Create `.reviews/` directory in repository root if it doesn't exist, then create incremental review markdown file:
    ```
-   {repo_owner}_{repo_name}_PR_{pr_number}_review.md
+   .reviews/{repo_owner}_{repo_name}_PR_{pr_number}_review.md
    ```
    
 3. Initialize review document with metadata section:

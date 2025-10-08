@@ -43,6 +43,6 @@ I need you to perform a comprehensive code review using the code-reviewer agent.
    - Test coverage analysis
    - Actionable recommendations with code snippets
 
-4. Save the final review as: `{repo_owner}_{repo_name}_PR_{pr_number}_review.md`
+4. Ensure the `.reviews/` directory exists in the repository root, then save the final review as: `.reviews/{repo_owner}_{repo_name}_PR_{pr_number}_review.md`
 
 Please ensure the review is thorough, actionable, and provides clear guidance for the PR author.
