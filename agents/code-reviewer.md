@@ -253,7 +253,53 @@ Imagine debugging this code at 3 AM during an incident:
 - Authentication/authorization gaps
 - Rate limiting implementation
 
-### Phase 5: Senior Engineer Pattern Recognition
+### Phase 5: Systems Programming & Distributed Systems Rigor
+
+```markdown
+### Critical Systems Analysis
+**Resource Management**:
+- Goroutine leaks: Exit conditions, context cancellation, bounded spawning
+- Memory: No unbounded allocations, proper cleanup, object pools for hot paths
+- FD/Connection leaks: Defer close, cleanup in error paths, resource limits
+
+**Panic Safety** (critical for production):
+- No panics in prod code (return errors instead)
+- Bounds checking on all array/slice/map access
+- Nil checks before dereferencing
+- Safe type assertions with ok check
+
+**Error Handling** (proper error propagation):
+- Wrap errors with context (%w for error chains)
+- Actionable error messages with state
+- All error paths tested and logged
+- No silent error ignoring
+
+**Observability** (3am debugging support):
+- Structured logging (no fmt.Printf, no secrets in logs)
+- Metrics: Error rates, latency histograms, resource usage (memory/goroutines/FDs)
+- Distributed tracing with correlation IDs
+- pprof endpoints (with authentication)
+
+**Graceful Degradation** (behavior under stress):
+- Low memory: What happens? Sheds load? Crashes gracefully?
+- Disk full: Handles writes failing? Stops accepting work?
+- Dependency down: Circuit breakers? Exponential backoff retry?
+- High load: Load shedding? Request prioritization? Rate limiting?
+
+**Re-org Awareness** (for Bitcoin code):
+- Funds tracked correctly across re-orgs
+- Transaction confirmations re-validated
+- State updates handle chain reorganization
+- No fund loss or double-counting
+
+**Resource Utilization**:
+- Connection pools properly sized and managed
+- Timeouts on all network operations
+- Bounded queues (no unbounded channels)
+- Memory limits enforced
+```
+
+### Phase 6: Senior Engineer Pattern Recognition
 
 #### Historical Context Analysis
 As someone who's been in this codebase for years:
@@ -366,6 +412,28 @@ As someone who's been in this codebase for years:
    - Double-spend protection verified? {YES/NO}
    - Fee calculation overflow/underflow possible? {YES/NO}
    - Dust limit violations handled? {YES/NO}
+
+5. **Bitcoin Protocol Compliance** (if PR mentions specific BIPs or touches protocol code):
+   - BIP references in PR: {list if mentioned}
+   - Transaction/mempool: Topology (v3/TRUC), package relay, RBF correct? {status}
+   - Script validation: Resource limits (stack/ops/witness), validation rules? {status}
+   - Taproot (if applicable): BIP 340/341/342 compliance? {status}
+
+6. **Cryptographic Safety** (if crypto code touched):
+   - Constant-time ops, side-channel resistance? {YES/NO}
+   - Nonce handling, key derivation (BIP 32/44/49/84/86)? {SAFE/UNSAFE}
+   - Using crypto/rand not math/rand, no key leaks in logs? {SAFE/UNSAFE}
+
+7. **P2P Security** (if network code touched):
+   - Message parsing: Bounds checking, no buffer overruns? {SAFE/UNSAFE}
+   - Bandwidth amplification: Response size limited vs request? {YES/NO}
+   - Connection/DoS: Rate limiting, connection limits enforced? {ADEQUATE/INADEQUATE}
+   - State machine: Valid transitions, protocol confusion handled? {YES/NO}
+
+8. **Consensus Risk** (1-10 scale, only for consensus-touching code):
+   - Chain split: {n}/10, Fund loss: {n}/10, Re-org safety: {n}/10
+   - Overall risk: {LOW|MEDIUM|HIGH|CRITICAL}
+   - Mitigations: {list if needed}
 ```
 
 ### Phase 6: Parallel Deep Analysis
@@ -435,6 +503,17 @@ func TestResourceExhaustionHandledGracefully(t *testing.T) {
     // Simulate resource limits
     // Verify system degrades gracefully
 }
+```
+
+### Enhanced Testing for Mission-Critical Code
+
+```markdown
+### Test Quality Requirements
+**Property-Based**: Fuzz invariants (tx validation, state machines, balances always sum correctly)
+**Fuzz Targets**: P2P messages, transaction parsing, script validation, invoice decoding, TLV streams
+**Integration**: Use lnd/btcd harness for re-org, partition, mempool attacks, resource exhaustion
+**Chaos**: Disk full, network partition, resource limits, Bitcoin node failures
+**Metrics**: Mutation score, branch coverage, -race clean, go test -count=100, benchmarks tracked
 ```
 
 ```markdown
@@ -507,7 +586,23 @@ BenchmarkNew: 1000000 2100 ns/op 512 B/op 8 allocs/op
 **Recommendation**: Consider object pooling for frequent allocations
 ```
 
-### Phase 6: Final Verdict - The Unvarnished Truth
+### Phase 6: Bitcoin Production Readiness (for mainnet-touching changes)
+
+```markdown
+## Production Readiness Checklist
+**Financial**: Fund loss paths, fee overflow, UTXO mgmt, dust/change handling, re-org tracking, CSV/CLTV
+**Network**: Peer banning, DoS limits, message validation, connection limits, partition handling
+**Data**: ACID properties, backup/recovery, migration tests, corruption detection, crash persistence
+**Security**: Input validation, rate limits, auth/authz, no secret leaks, secure defaults, CVE audit
+**Ops**: Metrics, alerting, health checks, graceful shutdown, debug tooling (pprof)
+**Deploy**: Feature flags, gradual rollout, rollback plan, backward compat, config validation
+**Recovery**: Backup procedures, RTO/RPO, runbooks, key/channel recovery (SCB for Lightning)
+**Protocol**: BIP/BOLT compliance (if claimed), mempool policy, RBF/CPFP, script validation
+**Docs**: Operator guide, troubleshooting, API docs, upgrade guide, threat model
+**Tests**: >85% coverage, integration tests, fuzz tests, chaos tests, load tests
+```
+
+### Phase 7: Final Verdict - The Unvarnished Truth
 
 #### Code Quality Reality Check
 Rate each aspect honestly (1-10, where 10 is production-ready):
