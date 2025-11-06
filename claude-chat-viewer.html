@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Chat History Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0f0f0f;
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background: #1a1a1a;
+            border-right: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #333;
+        }
+
+        .sidebar-header h1 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+
+        .load-projects-btn {
+            width: 100%;
+            padding: 10px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+            margin-bottom: 8px;
+        }
+
+        .load-projects-btn:hover {
+            background: #0052a3;
+        }
+
+        .load-file-btn {
+            width: 100%;
+            padding: 10px;
+            background: #00aa66;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .load-file-btn:hover {
+            background: #008855;
+        }
+
+        .project-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .project-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #252525;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .project-item:hover {
+            background: #2d2d2d;
+            border-color: #0066cc;
+        }
+
+        .project-item.active {
+            background: #0066cc;
+            border-color: #0066cc;
+        }
+
+        .project-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .project-meta {
+            font-size: 12px;
+            color: #888;
+        }
+
+        /* Main content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .toolbar {
+            padding: 15px 20px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .search-box {
+            flex: 1;
+            padding: 8px 12px;
+            background: #252525;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #0066cc;
+        }
+
+        .filter-select {
+            padding: 8px 12px;
+            background: #252525;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .stats {
+            font-size: 12px;
+            color: #888;
+            padding: 0 10px;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #1a1a1a;
+            border-radius: 8px;
+            border-left: 4px solid #333;
+        }
+
+        .message.user {
+            border-left-color: #00aa66;
+        }
+
+        .message.assistant {
+            border-left-color: #0066cc;
+        }
+
+        .message.system {
+            border-left-color: #cc6600;
+            background: #252020;
+        }
+
+        .message.hidden {
+            display: none;
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #333;
+        }
+
+        .message-role {
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .message.user .message-role {
+            color: #00aa66;
+        }
+
+        .message.assistant .message-role {
+            color: #0066cc;
+        }
+
+        .message.system .message-role {
+            color: #cc6600;
+        }
+
+        .message-timestamp {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .message-content {
+            line-height: 1.6;
+            color: #e0e0e0;
+        }
+
+        .message-metadata {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #333;
+            font-size: 12px;
+            color: #888;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .metadata-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .metadata-label {
+            color: #666;
+        }
+
+        .tool-use {
+            margin: 10px 0;
+            padding: 12px;
+            background: #252525;
+            border-radius: 6px;
+            border-left: 3px solid #cc6600;
+        }
+
+        .tool-name {
+            font-weight: 600;
+            color: #cc6600;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .tool-input {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 8px;
+            overflow-x: auto;
+        }
+
+        .tool-result {
+            margin: 10px 0;
+            padding: 12px;
+            background: #1a2520;
+            border-radius: 6px;
+            border-left: 3px solid #00aa66;
+        }
+
+        .tool-result-header {
+            font-weight: 600;
+            color: #00aa66;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .tool-output {
+            background: #0f0f0f;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        code {
+            background: #252525;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+        }
+
+        pre {
+            background: #0f0f0f;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        .empty-state-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #888;
+        }
+
+        .empty-state-text {
+            font-size: 14px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .highlight {
+            background: #cc660044;
+            padding: 2px;
+            border-radius: 2px;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+
+        .session-selector {
+            margin-top: 10px;
+        }
+
+        .session-item {
+            padding: 8px 12px;
+            background: #2a2a2a;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        .session-item:hover {
+            background: #333;
+        }
+
+        .session-item.active {
+            background: #0066cc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>Claude Projects</h1>
+                <button class="load-projects-btn" id="loadProjectsBtn">Load Projects Folder</button>
+                <button class="load-file-btn" id="loadFileBtn">Load Specific File</button>
+            </div>
+            <div class="project-list" id="projectList">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📁</div>
+                    <div class="empty-state-title">No Projects Loaded</div>
+                    <div class="empty-state-text">Click the button above to select the projects folder</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="toolbar">
+                <input type="text" class="search-box" id="searchBox" placeholder="Search messages...">
+                <select class="filter-select" id="typeFilter">
+                    <option value="all">All Messages</option>
+                    <option value="user">User Only</option>
+                    <option value="assistant">Assistant Only</option>
+                    <option value="system">System Only</option>
+                </select>
+                <div class="stats" id="stats"></div>
+            </div>
+            <div class="messages-container" id="messagesContainer">
+                <div class="empty-state">
+                    <div class="empty-state-icon">💬</div>
+                    <div class="empty-state-title">No Project Selected</div>
+                    <div class="empty-state-text">Select a project from the sidebar to view its chat history</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentDirectoryHandle = null;
+        let allProjects = [];
+        let currentMessages = [];
+        let currentProject = null;
+
+        // Initialize
+        document.getElementById('loadProjectsBtn').addEventListener('click', loadProjectsFolder);
+        document.getElementById('loadFileBtn').addEventListener('click', loadSpecificFile);
+        document.getElementById('searchBox').addEventListener('input', filterMessages);
+        document.getElementById('typeFilter').addEventListener('change', filterMessages);
+
+        async function loadProjectsFolder() {
+            try {
+                currentDirectoryHandle = await window.showDirectoryPicker();
+                await scanProjects();
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Error loading projects:', err);
+                    alert('Error loading projects folder. Make sure you have permission to access it.');
+                }
+            }
+        }
+
+        async function loadSpecificFile() {
+            try {
+                const [fileHandle] = await window.showOpenFilePicker({
+                    types: [
+                        {
+                            description: 'JSONL Files',
+                            accept: {
+                                'application/json': ['.jsonl', '.json']
+                            }
+                        }
+                    ],
+                    multiple: false
+                });
+
+                const file = await fileHandle.getFile();
+
+                // Clear the project list and show the loaded file
+                const projectListEl = document.getElementById('projectList');
+                projectListEl.innerHTML = `
+                    <div class="project-item active">
+                        <div class="project-name">${file.name}</div>
+                        <div class="project-meta">Loaded directly</div>
+                    </div>
+                `;
+
+                // Load the file
+                await loadFileDirectly(file);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Error loading file:', err);
+                    alert('Error loading file: ' + err.message);
+                }
+            }
+        }
+
+        async function loadFileDirectly(file) {
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.innerHTML = '<div class="loading">Loading messages...</div>';
+
+            try {
+                const text = await file.text();
+                const lines = text.split('\n').filter(line => line.trim());
+
+                currentMessages = lines.map((line, index) => {
+                    try {
+                        return JSON.parse(line);
+                    } catch (err) {
+                        console.error(`Error parsing line ${index + 1}:`, err);
+                        console.error('Line content:', line);
+                        return null;
+                    }
+                }).filter(msg => msg !== null);
+
+                console.log(`Loaded ${currentMessages.length} messages from ${file.name}`);
+                renderMessages();
+            } catch (err) {
+                console.error('Error loading file:', err);
+                messagesContainer.innerHTML = `<div class="empty-state"><div class="empty-state-text">Error loading file: ${err.message}</div></div>`;
+            }
+        }
+
+        async function scanProjects() {
+            allProjects = [];
+            const projectListEl = document.getElementById('projectList');
+            projectListEl.innerHTML = '<div class="loading">Scanning projects...</div>';
+
+            try {
+                let totalDirs = 0;
+                let projectDirs = 0;
+
+                for await (const entry of currentDirectoryHandle.values()) {
+                    totalDirs++;
+                    console.log(`Found entry: ${entry.name} (kind: ${entry.kind})`);
+
+                    if (entry.kind === 'directory' && entry.name.startsWith('-')) {
+                        projectDirs++;
+                        console.log(`Processing project directory: ${entry.name}`);
+                        const projectInfo = await getProjectInfo(entry);
+                        if (projectInfo) {
+                            allProjects.push(projectInfo);
+                            console.log(`Added project: ${projectInfo.name} with ${projectInfo.sessionCount} sessions`);
+                        }
+                    }
+                }
+
+                console.log(`Scanned ${totalDirs} entries, found ${projectDirs} project directories, loaded ${allProjects.length} projects`);
+
+                allProjects.sort((a, b) => b.lastModified - a.lastModified);
+                renderProjectList();
+            } catch (err) {
+                console.error('Error scanning projects:', err);
+                projectListEl.innerHTML = `<div class="empty-state"><div class="empty-state-text">Error scanning projects: ${err.message}<br><br>Try using "Load Specific File" instead.</div></div>`;
+            }
+        }
+
+        async function getProjectInfo(dirHandle) {
+            try {
+                const sessions = [];
+                let lastModified = 0;
+
+                for await (const entry of dirHandle.values()) {
+                    if (entry.kind === 'file' && entry.name.endsWith('.jsonl')) {
+                        const file = await entry.getFile();
+                        sessions.push({
+                            name: entry.name,
+                            handle: entry,
+                            modified: file.lastModified
+                        });
+                        lastModified = Math.max(lastModified, file.lastModified);
+                    }
+                }
+
+                if (sessions.length === 0) return null;
+
+                return {
+                    name: decodePath(dirHandle.name),
+                    dirHandle: dirHandle,
+                    sessions: sessions.sort((a, b) => b.modified - a.modified),
+                    sessionCount: sessions.length,
+                    lastModified: lastModified
+                };
+            } catch (err) {
+                console.error(`Error reading project ${dirHandle.name}:`, err);
+                return null;
+            }
+        }
+
+        function decodePath(encoded) {
+            return encoded.replace(/^-/, '').replace(/-/g, '/');
+        }
+
+        function renderProjectList() {
+            const projectListEl = document.getElementById('projectList');
+
+            if (allProjects.length === 0) {
+                projectListEl.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <div class="empty-state-title">No projects found</div>
+                        <div class="empty-state-text">The selected folder doesn't contain any project directories.<br><br>Try using "Load Specific File" to open a .jsonl file directly.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            projectListEl.innerHTML = '';
+
+            allProjects.forEach(project => {
+                const projectEl = document.createElement('div');
+                projectEl.className = 'project-item';
+                projectEl.innerHTML = `
+                    <div class="project-name">${project.name}</div>
+                    <div class="project-meta">${project.sessionCount} session(s) · ${formatDate(project.lastModified)}</div>
+                `;
+                projectEl.addEventListener('click', () => selectProject(project));
+                projectListEl.appendChild(projectEl);
+            });
+        }
+
+        async function selectProject(project) {
+            currentProject = project;
+
+            // Update UI
+            document.querySelectorAll('.project-item').forEach(el => el.classList.remove('active'));
+            event.target.closest('.project-item').classList.add('active');
+
+            // Load the most recent session
+            if (project.sessions.length > 0) {
+                await loadSession(project.sessions[0]);
+            }
+        }
+
+        async function loadSession(session) {
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.innerHTML = '<div class="loading">Loading messages...</div>';
+
+            try {
+                const file = await session.handle.getFile();
+                const text = await file.text();
+                const lines = text.split('\n').filter(line => line.trim());
+
+                currentMessages = lines.map(line => {
+                    try {
+                        return JSON.parse(line);
+                    } catch (err) {
+                        console.error('Error parsing line:', err);
+                        return null;
+                    }
+                }).filter(msg => msg !== null);
+
+                renderMessages();
+            } catch (err) {
+                console.error('Error loading session:', err);
+                messagesContainer.innerHTML = '<div class="empty-state"><div class="empty-state-text">Error loading session</div></div>';
+            }
+        }
+
+        function renderMessages() {
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.innerHTML = '';
+
+            const filteredMessages = getFilteredMessages();
+
+            if (filteredMessages.length === 0) {
+                messagesContainer.innerHTML = '<div class="empty-state"><div class="empty-state-text">No messages match your filters</div></div>';
+                updateStats(0, currentMessages.length);
+                return;
+            }
+
+            filteredMessages.forEach(msg => {
+                const messageEl = renderMessage(msg);
+                if (messageEl) {
+                    messagesContainer.appendChild(messageEl);
+                }
+            });
+
+            updateStats(filteredMessages.length, currentMessages.length);
+        }
+
+        function renderMessage(msg) {
+            // Skip certain message types
+            if (msg.type === 'file-history-snapshot' || msg.isMeta) {
+                return null;
+            }
+
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${msg.type || 'unknown'}`;
+
+            const header = document.createElement('div');
+            header.className = 'message-header';
+
+            const role = document.createElement('div');
+            role.className = 'message-role';
+            role.textContent = msg.type || msg.role || 'Unknown';
+
+            const timestamp = document.createElement('div');
+            timestamp.className = 'message-timestamp';
+            timestamp.textContent = formatTimestamp(msg.timestamp);
+
+            header.appendChild(role);
+            header.appendChild(timestamp);
+            messageEl.appendChild(header);
+
+            const content = document.createElement('div');
+            content.className = 'message-content';
+            content.innerHTML = renderMessageContent(msg);
+            messageEl.appendChild(content);
+
+            // Add metadata
+            const metadata = renderMetadata(msg);
+            if (metadata) {
+                messageEl.appendChild(metadata);
+            }
+
+            return messageEl;
+        }
+
+        function renderMessageContent(msg) {
+            if (msg.message && msg.message.content) {
+                const content = msg.message.content;
+
+                if (typeof content === 'string') {
+                    return escapeHtml(content).replace(/\n/g, '<br>');
+                }
+
+                if (Array.isArray(content)) {
+                    return content.map(item => {
+                        if (item.type === 'text') {
+                            return formatText(item.text);
+                        } else if (item.type === 'tool_use') {
+                            return renderToolUse(item);
+                        } else if (item.type === 'tool_result') {
+                            return renderToolResult(item);
+                        }
+                        return '';
+                    }).join('');
+                }
+            }
+
+            if (msg.content) {
+                return escapeHtml(msg.content).replace(/\n/g, '<br>');
+            }
+
+            return '<em>No content</em>';
+        }
+
+        function formatText(text) {
+            // Basic markdown-like formatting
+            text = escapeHtml(text);
+
+            // Code blocks
+            text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+                return `<pre><code>${code.trim()}</code></pre>`;
+            });
+
+            // Inline code
+            text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+            // Bold
+            text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+            // Line breaks
+            text = text.replace(/\n/g, '<br>');
+
+            return text;
+        }
+
+        function renderToolUse(tool) {
+            return `
+                <div class="tool-use">
+                    <div class="tool-name">🔧 ${tool.name}</div>
+                    <div class="tool-input"><pre><code>${JSON.stringify(tool.input, null, 2)}</code></pre></div>
+                </div>
+            `;
+        }
+
+        function renderToolResult(result) {
+            const content = result.content || '';
+            const isError = result.is_error ? ' (Error)' : '';
+
+            return `
+                <div class="tool-result">
+                    <div class="tool-result-header">📝 Result${isError}</div>
+                    <div class="tool-output">${escapeHtml(content)}</div>
+                </div>
+            `;
+        }
+
+        function renderMetadata(msg) {
+            const items = [];
+
+            // Token usage
+            if (msg.message && msg.message.usage) {
+                const usage = msg.message.usage;
+                const totalInput = (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0);
+                const totalOutput = usage.output_tokens || 0;
+                items.push(`<div class="metadata-item"><span class="metadata-label">Tokens:</span> ${totalInput} in / ${totalOutput} out</div>`);
+
+                if (usage.cache_read_input_tokens > 0) {
+                    items.push(`<div class="metadata-item"><span class="metadata-label">Cache hits:</span> ${usage.cache_read_input_tokens}</div>`);
+                }
+            }
+
+            // Session ID
+            if (msg.sessionId) {
+                items.push(`<div class="metadata-item"><span class="metadata-label">Session:</span> ${msg.sessionId.slice(0, 8)}...</div>`);
+            }
+
+            // Git branch
+            if (msg.gitBranch) {
+                items.push(`<div class="metadata-item"><span class="metadata-label">Branch:</span> ${msg.gitBranch}</div>`);
+            }
+
+            // Working directory
+            if (msg.cwd) {
+                const shortCwd = msg.cwd.split('/').slice(-2).join('/');
+                items.push(`<div class="metadata-item"><span class="metadata-label">CWD:</span> ${shortCwd}</div>`);
+            }
+
+            if (items.length === 0) return null;
+
+            const metadata = document.createElement('div');
+            metadata.className = 'message-metadata';
+            metadata.innerHTML = items.join('');
+            return metadata;
+        }
+
+        function getFilteredMessages() {
+            const searchTerm = document.getElementById('searchBox').value.toLowerCase();
+            const typeFilter = document.getElementById('typeFilter').value;
+
+            return currentMessages.filter(msg => {
+                // Type filter
+                if (typeFilter !== 'all' && msg.type !== typeFilter) {
+                    return false;
+                }
+
+                // Skip internal messages
+                if (msg.type === 'file-history-snapshot' || msg.isMeta) {
+                    return false;
+                }
+
+                // Search filter
+                if (searchTerm) {
+                    const content = JSON.stringify(msg).toLowerCase();
+                    return content.includes(searchTerm);
+                }
+
+                return true;
+            });
+        }
+
+        function filterMessages() {
+            renderMessages();
+        }
+
+        function updateStats(shown, total) {
+            const statsEl = document.getElementById('stats');
+            statsEl.textContent = `Showing ${shown} of ${total} messages`;
+        }
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            return date.toLocaleString();
+        }
+
+        function formatDate(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+            if (days === 0) return 'Today';
+            if (days === 1) return 'Yesterday';
+            if (days < 7) return `${days} days ago`;
+            return date.toLocaleDateString();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Check for File System Access API support
+        if (!('showDirectoryPicker' in window)) {
+            alert('Your browser does not support the File System Access API. Please use a modern browser like Chrome, Edge, or Opera.');
+        }
+    </script>
+</body>
+</html>
