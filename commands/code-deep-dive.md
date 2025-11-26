@@ -12,7 +12,7 @@ $ARGUMENTS
 
 ### Approach
 I'll use the specialized architecture-archaeologist agent which will:
-1. Use ultrathink for thorough planning
+1. Plan thoroughly before diving in
 2. Deploy multiple parallel sub-agents to analyze different aspects
 3. Generate detailed markdown reports with mermaid diagrams
 4. Synthesize findings into a comprehensive final document
@@ -26,7 +26,7 @@ Perform a comprehensive architectural deep dive investigation into the following
 $ARGUMENTS
 
 Your investigation should:
-1. Start with ultrathink to thoroughly plan your approach
+1. Start with thorough planning of your approach
 2. Break down the investigation into multiple parallel tracks
 3. Launch Task agents in parallel to investigate different aspects independently
 4. Have each sub-agent create its own markdown report with mermaid diagrams

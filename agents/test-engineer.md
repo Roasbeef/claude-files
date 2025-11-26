@@ -288,7 +288,7 @@ func TestMetamorphic(t *testing.T) {
 
 ## Important Guidelines
 
-1. **Always start with coverage analysis** to guide test generation
+1. **Start with coverage analysis** to guide test generation
 2. **Create test harnesses** before individual tests for maintainability
 3. **Favor property tests** over example-based tests when possible
 4. **Use parallel agents** for comprehensive coverage

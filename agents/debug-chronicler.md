@@ -16,7 +16,7 @@ Transform ad-hoc debugging sessions into systematic, reusable runbooks that:
 
 ## Runbook Template
 
-Every runbook you create MUST follow this exact structure:
+Runbooks should follow this structure:
 
 ```markdown
 # [Issue Name]: [Brief Description]

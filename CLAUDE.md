@@ -3,8 +3,8 @@
 - If unsure about a Go package/struct API, use `go doc` to look it up.
 
 # Git & PRs
-- NEVER include "Generated with Claude Code" or "Co-Authored-By: Claude" in commit messages or PR bodies.
-- Do not add any AI attribution footers to commits or PRs.
+- Don't include "Generated with Claude Code" or "Co-Authored-By: Claude" in commit messages or PR bodies.
+- Don't add any AI attribution footers to commits or PRs.
 
 # Task Management
 - Projects use `.tasks/` directory for task tracking.

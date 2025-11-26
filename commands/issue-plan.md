@@ -6,7 +6,7 @@ allowed-tools: Task, Bash, Grep, Glob, Read, LS, WebFetch, WebSearch, Write
 
 # GitHub Issue Analysis and Planning
 
-You are about to analyze a GitHub issue and create a comprehensive implementation plan. **THINK ULTRA HARD** about this task - take your time to deeply understand the issue, its context, and all potential implications. Use **ULTRATHINK** mode when analyzing complex technical requirements or architectural decisions.
+You are about to analyze a GitHub issue and create a comprehensive implementation plan. Take time to deeply understand the issue, its context, and all potential implications. Think thoroughly when analyzing complex technical requirements or architectural decisions.
 
 ## Step 1: Fetch Issue Details
 
@@ -33,7 +33,7 @@ gh issue status <issue-number>
 
 ## Step 2: Deep Analysis with Parallel Agents
 
-**ULTRATHINK** about the issue requirements and spin up parallel agents to investigate different aspects. Use the Task tool to launch multiple specialized agents SIMULTANEOUSLY for maximum efficiency:
+Think carefully about the issue requirements and spin up parallel agents to investigate different aspects. Use the Task tool to launch multiple specialized agents simultaneously for efficiency:
 
 1. **Code Analysis Agent** (general-purpose):
    - Search the codebase for related code mentioned in the issue
@@ -175,7 +175,7 @@ After gathering all information, create a markdown document named `issue-{issue-
 
 ## Step 4: Final Validation
 
-**ULTRATHINK** one more time to ensure:
+Review the plan to ensure:
 1. The plan is complete and actionable
 2. All security and architectural concerns are addressed
 3. The testing strategy is comprehensive
@@ -186,9 +186,9 @@ Save the plan document and provide a summary to the user with the file location.
 
 ## Important Instructions
 
-- **THINK ULTRA HARD** at every decision point
-- Use **ULTRATHINK** mode for complex technical analysis
-- Launch agents in PARALLEL for efficiency
+- Think carefully at every decision point
+- Use thorough analysis for complex technical decisions
+- Launch agents in parallel for efficiency
 - Be thorough but concise in the plan
 - Include specific, actionable items
 - Consider edge cases and failure modes
