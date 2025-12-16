@@ -44,6 +44,10 @@
           {
             "type": "command",
             "command": "/Users/roasbeef/.claude/hooks/userpromptsubmit/context_enhancer.py"
+          },
+          {
+            "type": "command",
+            "command": "/Users/roasbeef/.claude/hooks/userpromptsubmit/session_context.py"
           }
         ]
       }
@@ -51,12 +55,7 @@
     "PreToolUse": [
       {
         "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/roasbeef/.claude/hooks/pretooluse/sensitive_file_guard.sh"
-          }
-        ]
+        "hooks": []
       }
     ],
     "PostToolUse": [
@@ -68,7 +67,12 @@
     "SessionStart": [
       {
         "matcher": "",
-        "hooks": []
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/roasbeef/.claude/hooks/sessionstart/load_project_context.sh"
+          }
+        ]
       }
     ],
     "SessionEnd": [
@@ -80,7 +84,12 @@
     "PreCompact": [
       {
         "matcher": "",
-        "hooks": []
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/roasbeef/.claude/hooks/precompact/save_important_context.sh"
+          }
+        ]
       }
     ]
   },
