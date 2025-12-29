@@ -117,6 +117,91 @@ When using `/task-next`, tasks are selected by:
 5. Prefer tasks that unblock others
 6. Break ties by creation date (FIFO)
 
+## Session Management System
+
+Sessions provide execution continuity across context compactions and work periods. When Claude's context window compacts, sessions preserve your progress, decisions, and discoveries so work can resume seamlessly.
+
+### Why Sessions?
+
+Claude Code automatically compacts its context when approaching token limits. Without sessions:
+- You lose track of what you were doing
+- Decisions and their rationale are forgotten
+- Discoveries made during work are lost
+- Time is wasted re-understanding the codebase
+
+Sessions create a **living document** that survives compactions and enables rapid context restoration.
+
+### Directory Structure
+```
+project/
+└── .sessions/
+    ├── active/           # Currently active sessions
+    ├── archive/          # Completed/closed sessions
+    └── journal/          # Per-session execution logs
+```
+
+### Quick Start
+
+#### Session Lifecycle
+```
+/session-init  →  (active work)  →  /session-close --complete
+                       ↓
+                 (compaction)
+                       ↓
+               /session-resume
+```
+
+#### Claude Commands
+```bash
+/session-init               # Start new session (optionally link to task)
+/session-resume             # Resume after compaction
+/session-log                # Add progress/decision/discovery entries
+/session-checkpoint         # Save explicit checkpoint
+/session-view               # View session details
+/session-pause              # Pause with checkpoint
+/session-close --complete   # Complete and archive session
+```
+
+### Logging During Work
+
+Sessions work best when Claude logs as it works:
+
+```bash
+# Log decisions with rationale
+/session-log --decision "Using mutex over channels" --rationale="simpler for this case"
+
+# Log discoveries
+/session-log --discovery "Lock ordering: chain_watcher must lock before sweeper"
+
+# Log progress
+/session-log --progress "Implemented fix in sweeper.go:245-260"
+
+# Log blockers
+/session-log --blocker "Need API clarification from team"
+```
+
+### Relationship to Tasks
+
+Sessions and tasks are complementary:
+
+| Aspect | Tasks (.tasks/) | Sessions (.sessions/) |
+|--------|-----------------|----------------------|
+| Purpose | What to do | How work progresses |
+| Lifetime | Project lifetime | Single work effort |
+| Granularity | Feature/bug level | Execution level |
+| Survives | Project history | Compactions |
+
+**Best practice**: Link sessions to tasks with `/session-init --task=<id>`.
+
+### Hooks Integration
+
+Sessions integrate with the hooks system:
+- **PreCompact Hook**: Auto-saves session state before compaction
+- **SessionStart Hook**: Displays active session TL;DR on startup
+- **UserPromptSubmit Hook**: Detects "continue"/"resume" and injects context
+
+For complete documentation, see [SESSIONS.md](SESSIONS.md).
+
 ## Architecture
 
 ```mermaid
@@ -156,6 +241,7 @@ graph TB
         BR[Batch<br/>Review]
         DC[Doc<br/>Check]
         CF[Chronicle<br/>Fix]
+        ID[Ideate]
     end
     
     %% Hooks System
@@ -186,7 +272,7 @@ graph TB
     
     class Main core
     class AA,CS,CR,SA,TE,DD,GD,DC2 agents
-    class IC,PR,CD,QD,TF,BR,DC,CF commands
+    class IC,PR,CD,QD,TF,BR,DC,CF,ID commands
     class UT,NH,SH hooks
     class T1,T2,T3 tools
 ```
@@ -272,6 +358,23 @@ The **Doc Check** command (`commands/doc-check.md`) verifies documentation accur
 #### Chronicle Fix
 
 The **Chronicle Fix** command (`commands/chronicle-fix.md`) invokes the Debug Chronicler agent to analyze the current conversation and create a structured debugging runbook. This transforms one-off bug fixes into institutional knowledge that benefits the entire team, ensuring that debugging insights are preserved and reusable.
+
+#### Ideate
+
+The **Ideate** command (`commands/ideate.md`) transforms rough ideas into detailed implementation plans through structured interviewing. It accepts input in three forms: a file reference (`@rough-idea.md`), a GitHub issue (`#123` or full URL), or direct text input. Upon invocation, the command enters plan mode and conducts an in-depth interview using batches of 3-4 dynamic questions, probing for technical details, edge cases, constraints, dependencies, and architectural considerations. Questions are context-aware, referencing existing codebase patterns when relevant. The interview continues until the AI reaches a confidence threshold (~80%), then launches parallel enrichment agents (code analysis, security auditor, architecture review) to inform the final plan. The output is a structured plan file in `~/.claude/plans/` containing decisions made, implementation phases, risk assessment, and testing strategy. The command integrates with the session system for state persistence across context compactions.
+
+**Example usage:**
+```bash
+# From a file sketch
+/ideate @rough-idea.md
+
+# From a GitHub issue
+/ideate #456
+/ideate lightningnetwork/lnd#8456
+
+# From direct text
+/ideate "Add a new RPC endpoint for querying historical channel states"
+```
 
 ### Hooks System
 
