@@ -81,7 +81,7 @@ services:
       - LND_DEBUG=${LND_DEBUG:-debug}
       # Custom args (space-separated, appended to lnd command)
       - LND_EXTRA_ARGS=${LND_EXTRA_ARGS:-}
-    entrypoint: ["./start-lnd.sh"]
+    entrypoint: ["/bin/sh", "-c", "./start-lnd.sh $${LND_EXTRA_ARGS:-}"]
     ports:
       - "9735:9735"     # Lightning P2P
       - "10009:10009"   # gRPC
