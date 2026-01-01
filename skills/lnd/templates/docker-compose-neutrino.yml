@@ -1,0 +1,69 @@
+# LND Neutrino (Light Client) Stack
+#
+# This docker-compose runs LND in neutrino (light client) mode.
+# Neutrino doesn't require a local Bitcoin node - it connects to
+# remote peers using BIP 157/158 compact block filters.
+#
+# Best for:
+# - Testnet/Signet testing without running a full node
+# - Mobile/embedded scenarios simulation
+# - Quick testing when you don't need full node features
+#
+# Note: Neutrino is not recommended for mainnet with significant funds.
+# For regtest, you need a btcd node that supports BIP 157 (not bitcoind).
+#
+# Usage:
+#   # Testnet with public neutrino peer
+#   docker-compose -f docker-compose-neutrino.yml up -d
+#
+#   # Signet
+#   NETWORK=signet docker-compose -f docker-compose-neutrino.yml up -d
+#
+# LND gRPC (from host): localhost:10009
+# LND REST (from host): localhost:8080
+# LND P2P (from host): localhost:9735
+
+services:
+  lnd:
+    build:
+      context: ${LND_SOURCE:-/users/roasbeef/gocode/src/github.com/lightningnetwork/lnd}
+      dockerfile: dev.Dockerfile
+    image: ${LND_IMAGE:-lnd:local}
+    container_name: lnd-neutrino
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        exec lnd \
+          --noseedbackup \
+          --bitcoin.active \
+          --bitcoin.$${NETWORK:-testnet} \
+          --bitcoin.node=neutrino \
+          --neutrino.connect=$${NEUTRINO_PEER:-faucet.lightning.community} \
+          --feeurl=$${FEE_URL:-https://nodes.lightning.computer/fees/v1/btc-fee-estimates.json} \
+          --listen=0.0.0.0:9735 \
+          --rpclisten=0.0.0.0:10009 \
+          --restlisten=0.0.0.0:8080 \
+          --debuglevel=$${LND_DEBUG:-debug} \
+          $${LND_EXTRA_ARGS:-}
+    environment:
+      - NETWORK=${NETWORK:-testnet}
+      - NEUTRINO_PEER=${NEUTRINO_PEER:-faucet.lightning.community}
+      - FEE_URL=${FEE_URL:-https://nodes.lightning.computer/fees/v1/btc-fee-estimates.json}
+      - LND_DEBUG=${LND_DEBUG:-debug}
+      - LND_EXTRA_ARGS=${LND_EXTRA_ARGS:-}
+    ports:
+      - "9735:9735"     # Lightning P2P
+      - "10009:10009"   # gRPC
+      - "8080:8080"     # REST API
+    volumes:
+      - lnd-neutrino-data:/root/.lnd
+    networks:
+      - lnd-neutrino
+
+volumes:
+  lnd-neutrino-data:
+
+networks:
+  lnd-neutrino:
+    driver: bridge

@@ -1,0 +1,182 @@
+# Multiple LND Nodes + Bitcoin Core Regtest Stack
+#
+# This docker-compose runs multiple LND nodes for peer-to-peer testing.
+# All nodes share the same bitcoind backend.
+#
+# Usage:
+#   docker-compose -f docker-compose-multi.yml up -d --build
+#   docker-compose -f docker-compose-multi.yml down
+#   docker-compose -f docker-compose-multi.yml down -v   # Remove volumes
+#
+# Default nodes: alice, bob (2 nodes)
+# Add more by extending this file or using docker-compose --scale
+#
+# Node ports:
+#   alice: 9735 (P2P), 10009 (gRPC), 8080 (REST)
+#   bob:   9736 (P2P), 10010 (gRPC), 8081 (REST)
+#   charlie: 9737 (P2P), 10011 (gRPC), 8082 (REST)  # if enabled
+#
+# bitcoind: 18443 (RPC), 28332 (ZMQ blocks), 28333 (ZMQ tx)
+
+services:
+  bitcoind:
+    image: lightninglabs/bitcoin-core:30
+    container_name: lnd-multi-bitcoind
+    restart: unless-stopped
+    command:
+      - -regtest
+      - -server=1
+      - -rpcuser=devuser
+      - -rpcpassword=devpass
+      - -rpcallowip=0.0.0.0/0
+      - -rpcbind=0.0.0.0
+      - -txindex=1
+      - -fallbackfee=0.00001
+      - -addresstype=bech32m
+      - -changetype=bech32m
+      - -zmqpubrawblock=tcp://0.0.0.0:28332
+      - -zmqpubrawtx=tcp://0.0.0.0:28333
+      - -zmqpubhashblock=tcp://0.0.0.0:28332
+      - -zmqpubhashtx=tcp://0.0.0.0:28333
+    ports:
+      - "18443:18443"
+      - "18444:18444"
+      - "28332:28332"
+      - "28333:28333"
+    volumes:
+      - lnd-multi-bitcoind-data:/root/.bitcoin
+    networks:
+      - lnd-multi-regtest
+    healthcheck:
+      test: ["CMD", "bitcoin-cli", "-regtest", "-rpcuser=devuser", "-rpcpassword=devpass", "getblockchaininfo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  alice:
+    build:
+      context: ${LND_SOURCE:-/users/roasbeef/gocode/src/github.com/lightningnetwork/lnd}
+      dockerfile: dev.Dockerfile
+    image: ${LND_IMAGE:-lnd:local}
+    container_name: lnd-alice
+    restart: unless-stopped
+    depends_on:
+      bitcoind:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        exec lnd \
+          --noseedbackup \
+          --alias=alice \
+          --color=#FF6B6B \
+          --bitcoin.active \
+          --bitcoin.regtest \
+          --bitcoin.node=bitcoind \
+          --bitcoind.rpchost=bitcoind:18443 \
+          --bitcoind.rpcuser=devuser \
+          --bitcoind.rpcpass=devpass \
+          --bitcoind.zmqpubrawblock=tcp://bitcoind:28332 \
+          --bitcoind.zmqpubrawtx=tcp://bitcoind:28333 \
+          --listen=0.0.0.0:9735 \
+          --rpclisten=0.0.0.0:10009 \
+          --restlisten=0.0.0.0:8080 \
+          --debuglevel=$${LND_DEBUG:-debug} \
+          $${LND_EXTRA_ARGS:-}
+    ports:
+      - "9735:9735"
+      - "10009:10009"
+      - "8080:8080"
+    volumes:
+      - lnd-alice-data:/root/.lnd
+    networks:
+      - lnd-multi-regtest
+
+  bob:
+    build:
+      context: ${LND_SOURCE:-/users/roasbeef/gocode/src/github.com/lightningnetwork/lnd}
+      dockerfile: dev.Dockerfile
+    image: ${LND_IMAGE:-lnd:local}
+    container_name: lnd-bob
+    restart: unless-stopped
+    depends_on:
+      bitcoind:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        exec lnd \
+          --noseedbackup \
+          --alias=bob \
+          --color=#4ECDC4 \
+          --bitcoin.active \
+          --bitcoin.regtest \
+          --bitcoin.node=bitcoind \
+          --bitcoind.rpchost=bitcoind:18443 \
+          --bitcoind.rpcuser=devuser \
+          --bitcoind.rpcpass=devpass \
+          --bitcoind.zmqpubrawblock=tcp://bitcoind:28332 \
+          --bitcoind.zmqpubrawtx=tcp://bitcoind:28333 \
+          --listen=0.0.0.0:9735 \
+          --rpclisten=0.0.0.0:10009 \
+          --restlisten=0.0.0.0:8080 \
+          --debuglevel=$${LND_DEBUG:-debug} \
+          $${LND_EXTRA_ARGS:-}
+    ports:
+      - "9736:9735"
+      - "10010:10009"
+      - "8081:8080"
+    volumes:
+      - lnd-bob-data:/root/.lnd
+    networks:
+      - lnd-multi-regtest
+
+  # Uncomment to add a third node
+  # charlie:
+  #   build:
+  #     context: ${LND_SOURCE:-/users/roasbeef/gocode/src/github.com/lightningnetwork/lnd}
+  #     dockerfile: dev.Dockerfile
+  #   image: ${LND_IMAGE:-lnd:local}
+  #   container_name: lnd-charlie
+  #   restart: unless-stopped
+  #   depends_on:
+  #     bitcoind:
+  #       condition: service_healthy
+  #   entrypoint: ["/bin/sh", "-c"]
+  #   command:
+  #     - |
+  #       exec lnd \
+  #         --noseedbackup \
+  #         --alias=charlie \
+  #         --color=#FFE66D \
+  #         --bitcoin.active \
+  #         --bitcoin.regtest \
+  #         --bitcoin.node=bitcoind \
+  #         --bitcoind.rpchost=bitcoind:18443 \
+  #         --bitcoind.rpcuser=devuser \
+  #         --bitcoind.rpcpass=devpass \
+  #         --bitcoind.zmqpubrawblock=tcp://bitcoind:28332 \
+  #         --bitcoind.zmqpubrawtx=tcp://bitcoind:28333 \
+  #         --listen=0.0.0.0:9735 \
+  #         --rpclisten=0.0.0.0:10009 \
+  #         --restlisten=0.0.0.0:8080 \
+  #         --debuglevel=$${LND_DEBUG:-debug} \
+  #         $${LND_EXTRA_ARGS:-}
+  #   ports:
+  #     - "9737:9735"
+  #     - "10011:10009"
+  #     - "8082:8080"
+  #   volumes:
+  #     - lnd-charlie-data:/root/.lnd
+  #   networks:
+  #     - lnd-multi-regtest
+
+volumes:
+  lnd-multi-bitcoind-data:
+  lnd-alice-data:
+  lnd-bob-data:
+  # lnd-charlie-data:
+
+networks:
+  lnd-multi-regtest:
+    driver: bridge

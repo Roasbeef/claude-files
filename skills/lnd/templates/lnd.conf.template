@@ -1,0 +1,147 @@
+# LND Configuration Template
+# Copy to ~/.lnd/lnd.conf and modify as needed
+#
+# Documentation: https://github.com/lightningnetwork/lnd/blob/master/sample-lnd.conf
+
+[Application Options]
+# Node alias (visible on network graph)
+alias=lnd-dev
+
+# Node color in hex (visible on network graph)
+color=#3399ff
+
+# Log level: trace, debug, info, warn, error, critical
+debuglevel=debug
+
+# Data directory
+# datadir=~/.lnd/data
+
+# Log directory
+# logdir=~/.lnd/logs
+
+# TLS certificate settings
+# tlscertpath=~/.lnd/tls.cert
+# tlskeypath=~/.lnd/tls.key
+# tlsautorefresh=true
+
+# Listening addresses
+listen=0.0.0.0:9735
+rpclisten=localhost:10009
+restlisten=localhost:8080
+
+# External IP to advertise (for public nodes)
+# externalip=1.2.3.4
+
+# Maximum pending channels per peer
+maxpendingchannels=1
+
+# Minimum channel size (satoshis)
+minchansize=20000
+
+# Maximum channel size (satoshis, 16M default)
+# maxchansize=16777215
+
+# DANGER: Only use for testing! No seed backup = no recovery possible
+# noseedbackup=true
+
+# Auto-unlock wallet with password file
+# wallet-unlock-password-file=/path/to/password.txt
+# wallet-unlock-allow-create=true
+
+
+[Bitcoin]
+# Activate Bitcoin
+bitcoin.active=true
+
+# Network: mainnet, testnet, signet, regtest
+bitcoin.regtest=true
+
+# Backend node type: btcd, bitcoind, neutrino
+bitcoin.node=bitcoind
+
+# Default channel confirmations
+bitcoin.defaultchanconfs=3
+
+# Default CSV delay for remote party
+bitcoin.defaultremotedelay=144
+
+# Base fee in millisatoshis
+bitcoin.basefee=1000
+
+# Fee rate in millionths of a satoshi per forwarded satoshi
+bitcoin.feerate=1
+
+# CLTV delta for forwarded HTLCs
+bitcoin.timelockdelta=80
+
+
+[Bitcoind]
+# Bitcoin Core RPC settings
+bitcoind.rpchost=localhost:18443
+bitcoind.rpcuser=devuser
+bitcoind.rpcpass=devpass
+
+# ZMQ endpoints (required for block/tx notifications)
+bitcoind.zmqpubrawblock=tcp://127.0.0.1:28332
+bitcoind.zmqpubrawtx=tcp://127.0.0.1:28333
+
+# Alternative: use RPC polling instead of ZMQ
+# bitcoind.rpcpolling=true
+
+# Fee estimation mode: ECONOMICAL or CONSERVATIVE
+bitcoind.estimatemode=CONSERVATIVE
+
+
+[Btcd]
+# btcd RPC settings
+btcd.rpchost=localhost:18556
+btcd.rpcuser=devuser
+btcd.rpcpass=devpass
+btcd.rpccert=~/.btcd/rpc.cert
+
+
+[neutrino]
+# Neutrino (light client) settings
+# Required peer to connect to
+# neutrino.connect=faucet.lightning.community
+
+# Additional peers
+# neutrino.addpeer=btcd.example.com
+
+# Maximum peers
+neutrino.maxpeers=8
+
+# Validate channels during sync (slower but safer)
+neutrino.validatechannels=false
+
+# Persist compact block filters to disk
+neutrino.persistfilters=false
+
+
+[autopilot]
+# Automatic channel management (disabled by default)
+autopilot.active=false
+autopilot.maxchannels=5
+autopilot.allocation=0.6
+autopilot.minchansize=20000
+autopilot.maxchansize=16777215
+
+
+[tor]
+# Tor settings for privacy
+tor.active=false
+tor.socks=localhost:9050
+tor.control=localhost:9051
+# tor.v3=true
+
+
+[watchtower]
+# Watchtower server settings
+watchtower.active=false
+# watchtower.listen=0.0.0.0:9911
+
+
+[wtclient]
+# Watchtower client settings
+wtclient.active=false
+# wtclient.sweep-fee-rate=10
