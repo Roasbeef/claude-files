@@ -57,7 +57,7 @@ services:
           --bitcoind.zmqpubrawtx=tcp://localhost:28333 \
           --listen=0.0.0.0:9736 \
           --rpclisten=localhost:10009 \
-          --restlisten=localhost:8080 \
+          --restlisten=localhost:8081 \
           --debuglevel=$${LND_DEBUG:-debug} \
           $${LND_EXTRA_ARGS:-}
     volumes:
