@@ -39,6 +39,39 @@ Do not make autonomous choices for non-trivial cases in these categories:
 - Don't include "Generated with Claude Code" or "Co-Authored-By: Claude" in commit messages or PR bodies.
 - Don't add any AI attribution footers to commits or PRs.
 
+# Hunk for Precision Staging
+
+Hunk enables line-level git staging, designed for AI agents who know exactly which lines they changed.
+
+**When to use hunk instead of regular git:**
+- You modified multiple areas of a file but only want to commit some changes
+- You want to make atomic, focused commits from a larger set of changes
+- You need to stage specific line ranges without interactive prompts
+
+**Core workflow:**
+```bash
+hunk diff --json                # See changes with line numbers (machine-readable)
+hunk diff                       # Human-readable diff with line numbers
+hunk stage main.go:42-45        # Stage specific lines
+hunk stage main.go:10-20,30-40  # Stage multiple ranges
+hunk preview                    # See what will be committed
+hunk commit -m "message"        # Commit staged changes
+hunk reset                      # Unstage if needed
+```
+
+**FILE:LINES syntax:**
+- `file.go:10` - Single line
+- `file.go:10-20` - Range (inclusive)
+- `file.go:10-20,30-40` - Multiple ranges in one file
+- `file.go:10 other.go:5-8` - Multiple files (space-separated)
+
+Line numbers refer to **new file** lines (what editors display), not old file lines.
+
+**Best practices:**
+- Run `hunk diff --json` to get exact line numbers before staging.
+- Use `hunk preview` to verify the patch looks correct before committing.
+- For focused commits, stage only related changes together.
+
 # Task Management
 - Projects use `.tasks/` directory for task tracking.
 - Run `/task-list` when starting work on any project.
