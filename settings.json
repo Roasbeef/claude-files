@@ -1,4 +1,15 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npx uuid v7)",
+      "Bash(uuidgen:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(mkdir:*)",
+      "Bash(bun --version:*)",
+      "WebSearch"
+    ],
+    "defaultMode": "default"
+  },
   "hooks": {
     "Notification": [
       {
@@ -73,6 +84,15 @@
             "command": "/Users/roasbeef/.claude/hooks/sessionstart/load_project_context.sh"
           }
         ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'POST-COMPACTION: You MUST immediately run /session-resume to restore session context before doing anything else.'"
+          }
+        ]
       }
     ],
     "SessionEnd": [
@@ -98,10 +118,13 @@
     "command": "input=$(cat); cwd=\"$(echo \"$input\" | jq -r '.workspace.current_dir')\"; model=\"$(echo \"$input\" | jq -r '.model.display_name')\"; if [ -d \"$cwd/.git\" ]; then cd \"$cwd\" 2>/dev/null && branch=$(git branch --show-current 2>/dev/null); if [ -n \"$branch\" ]; then git_info=\" [$branch]\"; else git_info=\" [detached]\"; fi; changes=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' '); if [ \"$changes\" -gt 0 ]; then git_info=\"$git_info *\"; fi; else git_info=\"\"; fi; printf \"⛰ %s | %s%s | %s\" \"$(whoami)\" \"$(basename \"$cwd\")\" \"$git_info\" \"$model\""
   },
   "enabledPlugins": {
-    "claude-opus-4-5-migration@claude-code-plugins": true
+    "code-review@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true,
+    "ralph-wiggum@claude-plugins-official": true
   },
   "alwaysThinkingEnabled": true,
   "feedbackSurveyState": {
     "lastShownTime": 1753983872081
-  }
+  },
+  "model": "opus"
 }
