@@ -21,60 +21,38 @@ Work through all review comments on PR #$ARGUMENTS, creating fixup commits for e
 
 ## Phase 1: Fetch PR Data
 
-### Auto-detect Repository
-```bash
-# Extract owner/repo from git remote origin
-REMOTE_URL=$(git remote get-url origin 2>/dev/null)
-if [ -z "$REMOTE_URL" ]; then
-    echo "ERROR: Not in a git repository or no origin remote"
-    exit 1
-fi
+The `gh` CLI auto-detects the repository from the current directory - no manual parsing needed.
 
-# Handle SSH (git@github.com:owner/repo.git) and HTTPS (https://github.com/owner/repo.git)
-OWNER_REPO=$(echo "$REMOTE_URL" | sed -E 's#(git@|https://)github\.com[:/]##' | sed 's/\.git$//')
-OWNER=$(echo "$OWNER_REPO" | cut -d'/' -f1)
-REPO=$(echo "$OWNER_REPO" | cut -d'/' -f2)
-
-echo "Repository: $OWNER/$REPO"
-echo "PR Number: $ARGUMENTS"
-```
-
-### Fetch All Comments via GraphQL
-Run this command to fetch both review thread comments and conversation comments:
+### Fetch PR Info and Comments
 
 ```bash
-gh api graphql -f owner="$OWNER" -f repo="$REPO" -F number=$ARGUMENTS -f query='
+# Get basic PR info
+gh pr view $ARGUMENTS --json number,title,url,headRefOid,commits
+
+# Get review comments (code-specific, with file/line info)
+gh api repos/{owner}/{repo}/pulls/$ARGUMENTS/comments
+
+# Get conversation comments (general discussion)
+gh api repos/{owner}/{repo}/issues/$ARGUMENTS/comments
+
+# Get review threads with resolution status (GraphQL, for isResolved field)
+gh api graphql -F number=$ARGUMENTS -F owner='{owner}' -F repo='{repo}' -f query='
 query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
-      title
-      url
-      headRefOid
       reviewThreads(first: 100) {
         nodes {
           id
           isResolved
-          resolvedBy { login }
           path
           line
-          startLine
           comments(first: 50) {
             nodes {
-              id
               body
               author { login }
               originalCommit { oid }
-              createdAt
             }
           }
-        }
-      }
-      comments(first: 100) {
-        nodes {
-          id
-          body
-          author { login }
-          createdAt
         }
       }
     }
@@ -82,6 +60,8 @@ query($owner: String!, $repo: String!, $number: Int!) {
 }
 '
 ```
+
+The `{owner}` and `{repo}` placeholders are auto-filled by `gh` based on the current git repo.
 
 ## Phase 2: Analyze & Create TODOs
 
