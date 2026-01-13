@@ -6,8 +6,6 @@ allowed-tools:
   - Bash(git:*)
   - Bash(hunk:*)
   - Read
-  - Write
-  - Edit
   - Grep
   - Glob
   - TodoWrite
