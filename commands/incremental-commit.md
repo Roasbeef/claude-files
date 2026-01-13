@@ -54,6 +54,65 @@ hunk stage file.go:40-60      # Stage feature lines
 hunk commit -m "feat: ..."
 ```
 
+### Understanding Hunk Line Numbers
+The `hunk diff` output shows two columns of line numbers:
+- **Left column (OLD)**: Line numbers in the original file (before changes)
+- **Right column (NEW)**: Line numbers in the modified file (after changes)
+
+Line number semantics by operation type:
+- **Additions** (lines with `+`): Use NEW file line numbers (right column)
+- **Deletions** (lines with `-`): Use OLD file line numbers (left column)
+- **Replacements** (delete + add): Include BOTH old and new line numbers
+
+### Staging Replacements
+When staging changes that replace existing code (deletions followed by additions),
+you must include line numbers for both the deleted and added lines.
+
+Example: Replacing a field assignment in a struct initialization:
+```
+   45     45   func NewService(cfg Config) *Service {
+   46     46       return &Service{
+-  47            backend:  cfg.Backend,    // OLD line 47 being deleted
++       47       client:   cfg.Client,     // NEW line 47 being added
+   48     48       timeout: cfg.Timeout,
+```
+
+To stage this replacement correctly:
+```bash
+# Include BOTH the old line (47) AND new line (47)
+hunk stage service.go:47
+
+# Verify the patch includes both deletion and addition
+hunk preview
+```
+
+For more complex replacements spanning multiple lines:
+```
+   100    100   type Handler struct {
+-  101          conn    net.Conn       // OLD lines 101-102 deleted
+-  102          active  bool
++      101      client  *Client        // NEW lines 101-103 added
++      102      ready   bool
++      103      ctx     context.Context
+   103    104   }
+```
+
+Stage with ranges covering both old and new:
+```bash
+# Old lines 101-102 (deletions) + new lines 101-103 (additions)
+hunk stage handler.go:101-103
+```
+
+### Verification Workflow
+Always verify before committing:
+```bash
+hunk diff --json              # Get exact line numbers
+hunk stage file.go:LINES      # Stage the change
+hunk preview                  # Verify patch looks correct
+# If wrong, reset and try again:
+hunk reset
+```
+
 ### Multiple Files, Specific Lines
 ```bash
 hunk stage api.go:15-30 handler.go:8-12
