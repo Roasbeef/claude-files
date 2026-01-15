@@ -23,5 +23,7 @@ fi
 enhanced_message="[$dir_name$git_info] $message"
 
 # Play sound and show alert
-afplay "$sound" &
-osascript -e "display alert \"Claude Code\" message \"$enhanced_message\""
+afplay "$sound" 2>/dev/null &
+osascript -e "display alert \"Claude Code\" message \"$enhanced_message\"" >/dev/null 2>&1 || true
+
+exit 0
