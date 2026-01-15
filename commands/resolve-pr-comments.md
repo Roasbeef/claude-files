@@ -125,11 +125,35 @@ If `hunk` is not available, fall back to file-level staging:
 git add path/to/file.go
 ```
 
-### 3.5 Create Fixup Commit
-Create a fixup commit targeting the original commit where the reviewer commented:
+### 3.5 Determine Fixup Target with Git Blame
+
+**CRITICAL**: Group changes by target commit, not by logical fix. A single review comment fix may require multiple fixup commits if it touches code from different original commits.
+
+Before staging, use `git blame` to find which commit introduced each changed line:
+```bash
+# Check which commit introduced specific lines
+git blame -L 69,69 path/to/file.go
+git blame -L 142,145 path/to/other_file.go
+```
+
+**Example problem**: A fix requires changes to both `expiry.go` (created in commit A) and `transitions.go` (created later in commit B). If you create a single fixup targeting commit A, the rebase will fail with "deleted by us" because `transitions.go` doesn't exist yet at that point in history.
+
+**Solution**: Create separate fixup commits:
+```bash
+# Fixup 1: changes to file from commit A
+hunk stage expiry.go:141-163
+git commit --fixup=<commit-A-sha>
+
+# Fixup 2: changes to file from commit B
+hunk stage transitions.go:69
+git commit --fixup=<commit-B-sha>
+```
+
+### 3.6 Create Fixup Commit
+Create a fixup commit targeting the original commit where the code was introduced:
 
 ```bash
-# ORIGINAL_COMMIT_SHA comes from the comment's originalCommit.oid
+# Use the SHA from git blame (preferred) or the comment's originalCommit.oid
 git commit --fixup=ORIGINAL_COMMIT_SHA
 ```
 
@@ -138,7 +162,7 @@ If no original commit SHA is available (e.g., conversation comments), use a regu
 git commit -m "address review: brief description of change"
 ```
 
-### 3.6 Mark TODO Complete
+### 3.7 Mark TODO Complete
 Update the TODO status to "completed" before moving to the next item.
 
 ## Phase 4: Handle Edge Cases
@@ -188,8 +212,10 @@ git push --force-with-lease
 
 1. **Always ask before large changes**: If unsure how to interpret a comment, use `AskUserQuestion` rather than guessing.
 
-2. **One fixup per comment**: Each review comment should get its own fixup commit for clean history.
+2. **One fixup per TARGET COMMIT**: Group changes by which commit introduced the code, not by logical fix. Use `git blame` to determine targets. A single review comment may need multiple fixup commits if it touches code from different original commits.
 
 3. **Preserve conversation context**: Don't assume bot comments or status messages need action.
 
 4. **Check for replies**: If a thread has back-and-forth, read the full thread to understand if the issue was already resolved through discussion.
+
+5. **Avoid "deleted by us" conflicts**: If a fixup touches multiple files, verify all files exist at the target commit's point in history. Files created in later commits need their own fixup targeting that later commit.
