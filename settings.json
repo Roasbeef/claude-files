@@ -126,5 +126,9 @@
   "feedbackSurveyState": {
     "lastShownTime": 1753983872081
   },
-  "model": "opus"
+  "model": "opus",
+  "env": {
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000",
+    "MAX_THINKING_TOKENS": "63999"
+  }
 }
