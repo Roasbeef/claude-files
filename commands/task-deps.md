@@ -1,94 +1,168 @@
 ---
 name: task-deps
 description: Manage task dependencies and view dependency graph
-argument-hint: <action> [task-id] [--blocks=id] [--blocked-by=id] [--recursive]
+argument-hint: <action> [task-id] [--blocks=id] [--blocked-by=id]
 match: always
 ---
 
-Manage and visualize task dependencies. Action: $1, Task ID: $2
+Manage and visualize task dependencies using Claude Code's built-in task system.
 
+Action: $1, Task ID: $2
 Arguments: $ARGUMENTS
 
-## Steps:
-1. Load all tasks from `.tasks/active/`
-2. Build dependency graph from blocks/blocked_by fields
-3. Execute requested action (add, remove, check, visualize)
+## Actions
 
-## Parameters:
-- `<action>`: add|remove|check|graph
-- `<task-id>`: Task ID or shortname
-- `--blocks=<id>`: Task that will be blocked by this task
-- `--blocked-by=<id>`: Task that blocks this task
-- `--recursive`: Show full dependency chain
+### add
+Add a dependency relationship between tasks.
 
-## Actions:
-
-### Add Dependency
-```bash
-/task-deps add fix-auth --blocked-by=update-api
 ```
-Updates fix-auth to wait for update-api to complete.
-
-### Remove Dependency
-```bash
-/task-deps remove fix-auth --blocked-by=update-api
+/task-deps add 3 --blocked-by=1
 ```
 
-### Check Dependencies
-```bash
-/task-deps check fix-auth
+**Steps**:
+1. Use TaskGet to verify both tasks exist
+2. Use TaskUpdate on task 3 with `addBlockedBy: ["1"]`
+3. Use TaskUpdate on task 1 with `addBlocks: ["3"]`
+4. Display updated dependency info
+
+**TaskUpdate calls**:
+```json
+// Update the dependent task
+{"taskId": "3", "addBlockedBy": ["1"]}
+
+// Update the blocking task
+{"taskId": "1", "addBlocks": ["3"]}
 ```
-Output:
+
+### remove
+Remove a dependency relationship.
+
 ```
-📊 Dependencies for: fix-auth-01234567
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/task-deps remove 3 --blocked-by=1
+```
+
+**Steps**:
+1. Use TaskGet on task 3 to get current `blockedBy`
+2. Use TaskGet on task 1 to get current `blocks`
+3. Note: There's no `removeBlockedBy` - dependencies are managed via the array fields
+4. Inform user that dependency removal requires checking if the blocking task is completed
+
+**Note**: The built-in system doesn't have explicit remove operations for dependencies. Once a blocking task is completed, the dependent task becomes unblocked automatically.
+
+### check
+Check dependencies for a specific task.
+
+```
+/task-deps check 3
+```
+
+**Steps**:
+1. Use TaskGet to get the target task
+2. Use TaskList to get all tasks (for resolving IDs to names)
+3. For each ID in `blockedBy`: Show task subject and status
+4. For each ID in `blocks`: Show task subject and status
+5. Calculate if task is ready or blocked
+
+**Output**:
+```
+Dependencies for: #3 (fix-auth-bug)
+---
 Blocked By (must complete first):
-  ✅ update-api-0987654 [completed]
-  ❌ review-security-0456789 [in_progress]
+  [completed] #1 update-api
+  [in_progress] #2 review-security
 
 Blocks (waiting on this task):
-  ⏸️ deploy-prod-0234567 [ready]
-  ⏸️ update-docs-0345678 [ready]
+  [pending] #4 deploy-prod
+  [pending] #5 update-docs
 
 Status: BLOCKED (1 dependency incomplete)
 ```
 
-### Dependency Graph
-```bash
+### graph
+Visualize the full dependency graph.
+
+```
 /task-deps graph
 ```
-Output:
+
+**Steps**:
+1. Use TaskList to get all tasks
+2. Build adjacency list from `blocks`/`blockedBy` fields
+3. Detect circular dependencies using DFS
+4. Display ASCII graph
+
+**Output**:
 ```
-📊 Task Dependency Graph
-━━━━━━━━━━━━━━━━━━━━━━━━
-update-api ──┬──> fix-auth ──┬──> deploy-prod
-             │                └──> update-docs
-review-security ─┘
+Task Dependency Graph
+---
+#1 update-api ──┬──> #3 fix-auth ──┬──> #4 deploy-prod
+                │                   └──> #5 update-docs
+#2 review-security ─┘
 
 Legend:
-→ Dependencies flow left to right
+──> Dependency flow (left must complete before right)
 [*] In progress
-[✓] Completed
+[v] Completed
 [!] Blocked
 ```
 
-## Circular Dependency Detection:
-- Automatically detect circular dependencies
-- Warn when adding a dependency would create a cycle
-- Show the cycle path for debugging
+## Parameters
+- `<action>`: add | remove | check | graph
+- `<task-id>`: Task ID (numeric) or shortname
+- `--blocks=<id>`: Task that will be blocked by this task
+- `--blocked-by=<id>`: Task that blocks this task
 
-## Batch Operations:
-```bash
-/task-deps add implement-feature --blocks="test-feature,document-feature,deploy-feature"
+## Batch Operations
+
+Add multiple dependencies at once:
+```
+/task-deps add 5 --blocks="6,7,8"
 ```
 
-## Dependency Resolution Order:
-When all dependencies are met, suggests optimal task order:
+Translates to:
+```json
+{"taskId": "5", "addBlocks": ["6", "7", "8"]}
+{"taskId": "6", "addBlockedBy": ["5"]}
+{"taskId": "7", "addBlockedBy": ["5"]}
+{"taskId": "8", "addBlockedBy": ["5"]}
 ```
-Suggested execution order:
-1. update-api (no dependencies)
-2. review-security (no dependencies)
-3. fix-auth (depends on 1,2)
-4. deploy-prod (depends on 3)
-5. update-docs (depends on 3)
+
+## Circular Dependency Detection
+
+Before adding a dependency:
+1. Build current dependency graph from TaskList
+2. Simulate adding the new edge
+3. Run cycle detection (DFS from target node)
+4. If cycle found: Warn and abort
+
 ```
+Cannot add dependency: #3 -> #1
+This would create a circular dependency:
+  #1 -> #2 -> #3 -> #1
+
+Dependency not added.
+```
+
+## Dependency Resolution Order
+
+When running `graph`, also show optimal execution order:
+```
+Suggested Execution Order:
+1. #1 update-api (no dependencies)
+2. #2 review-security (no dependencies)
+3. #3 fix-auth (depends on #1, #2)
+4. #4 deploy-prod (depends on #3)
+5. #5 update-docs (depends on #3)
+```
+
+Uses topological sort on the dependency graph.
+
+## Error Handling
+- Task not found: "Task #N not found. Use `/task-list` to see available tasks."
+- Circular dependency: Show the cycle path and abort
+- Self-dependency: "Cannot add self-dependency on task #N"
+
+## Important
+- Always update BOTH sides of a dependency (blocks AND blockedBy)
+- The built-in system tracks dependencies but doesn't prevent starting blocked tasks
+- Use `/task-next` for automatic dependency-aware task selection

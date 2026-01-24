@@ -5,59 +5,87 @@ argument-hint: <task-id> [--current] [--raw]
 match: always
 ---
 
-Display full details of a specific task. Task ID or shortname: $1
+Display full details of a specific task using Claude Code's built-in task system.
 
+Task ID or shortname: $1
 Arguments: $ARGUMENTS
 
-## Steps:
-1. Find task by ID (partial match) or shortname
-2. Load and parse the full markdown file
-3. Display all metadata and content
-4. Show acceptance criteria status
-5. Show related tasks (dependencies and dependents)
+## Steps
 
-## Parameters:
-- `<task-id>`: Task ID or shortname (partial match supported)
+1. **Determine which task to view**:
+   - If `--current` flag: Use TaskList to find task with `status=in_progress` (prefer one with owner set)
+   - If task ID provided: Use TaskGet with the numeric ID
+   - If shortname provided: Use TaskList, then find task where `metadata.shortname` matches
+
+2. **Use TaskGet tool** to retrieve full task details
+
+3. **Derive display status**:
+   - `status=completed` -> "completed"
+   - `status=in_progress` -> "in_progress"
+   - `status=pending` + non-empty `blockedBy` with incomplete tasks -> "blocked"
+   - `status=pending` + `metadata.blocked_reason` set -> "blocked"
+   - `status=pending` + empty/resolved `blockedBy` -> "ready"
+
+4. **Display formatted output**
+
+## Parameters
+- `<task-id>`: Task ID (numeric) or shortname (partial match supported)
 - `--current`: View current in_progress task
-- `--raw`: Show raw markdown content
+- `--raw`: Show raw JSON data from TaskGet
 
-## Output Format:
+## Display Format
 ```
-📋 Task Details: fix-auth-bug-01234567-89ab-7cde
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ID: 01234567-89ab-7cde-f012-456789abcdef
+Task Details: #3 (fix-auth-bug)
+---
+ID: 3
 Status: in_progress
 Priority: P0 | Size: M
-Assignee: agent-1
+Owner: claude-code
 Tags: [security, authentication]
-Created: 2025-01-01T10:00:00Z
-Updated: 2025-01-01T14:00:00Z
+Created: 2025-01-23T10:00:00Z
+Updated: 2025-01-23T14:00:00Z
 
-TITLE
+SUBJECT
 Fix authentication bug in login flow
 
 DESCRIPTION
-Users are unable to login when their session expires...
+Users are unable to login when their session expires. The JWT refresh
+logic appears to have a race condition.
 
 ACCEPTANCE CRITERIA
-✅ Bug is reproduced in test environment
-✅ Root cause identified
-☐ Fix implemented
-☐ Tests added
-☐ Documentation updated
+[x] Bug is reproduced in test environment
+[x] Root cause identified
+[ ] Fix implemented
+[ ] Tests added
+[ ] Documentation updated
 
 DEPENDENCIES
-← Blocks: implement-2fa-0987654
-→ Blocked by: none
-
-TECHNICAL DETAILS
-The issue appears to be in the JWT refresh logic...
+Blocks: #4, #5
+Blocked by: none
 ```
 
-## Quick Actions:
-After viewing, offer quick actions:
-- [S]tart working (if ready)
-- [B]lock with reason
-- [C]omplete task
-- [E]dit task
-- [A]ssign to someone
+## Field Mappings
+- ID: `id` from TaskGet
+- Shortname: `metadata.shortname`
+- Subject: `subject` field
+- Description: `description` field
+- Status: Derived (see above)
+- Priority: `metadata.priority`
+- Size: `metadata.size`
+- Owner: `owner` field
+- Tags: `metadata.tags` array
+- Created/Updated: `metadata.created_at`, `metadata.updated_at`
+- Acceptance Criteria: `metadata.acceptance_criteria` array
+- Blocks: `blocks` array
+- Blocked by: `blockedBy` array
+
+## Quick Actions
+After viewing, suggest available actions:
+- Start working: `/task-status <id> in_progress`
+- Block task: `/task-status <id> blocked --reason="..."`
+- Complete task: `/task-complete <id>`
+- Add dependency: `/task-deps add <id> --blocked-by=<other-id>`
+
+## Error Handling
+- If task not found: "Task not found. Use `/task-list` to see available tasks."
+- If multiple matches for shortname: List all matches and ask user to specify by ID

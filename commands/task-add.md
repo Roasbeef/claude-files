@@ -5,70 +5,80 @@ argument-hint: [task details or empty for interactive mode]
 match: always
 ---
 
-Create a new task in the project's `.tasks/` directory.
+Create a new task using Claude Code's built-in task system.
 
 Arguments: $ARGUMENTS
 
-## Steps:
-1. Check if `.tasks/` directory exists, create if not
-2. Generate task ID using UUIDv7: `npx uuid v7`
-3. Create short name from title (e.g., "fix-auth-bug")
-4. Create task markdown file with provided or prompted information
-5. Save to `.tasks/active/` directory as `{shortname}-{uuid}.md`
+## Steps
 
-## Task Template:
-```markdown
----
-id: 01234567-89ab-7cde-f012-456789abcdef
-shortname: fix-auth-bug
-title: Fix authentication bug in login flow
-priority: P1
-size: M
-status: ready
-tags: []
-blocks: []  # Tasks that this task blocks (dependent tasks)
-blocked_by: []  # Tasks that block this task (dependencies)
-assignee:
-created_at: 2025-01-01T00:00:00Z
-updated_at: 2025-01-01T00:00:00Z
----
+1. **Gather task information** (interactive if no arguments provided):
+   - Subject: Task title in imperative form (e.g., "Fix auth bug", "Add unit tests")
+   - Description: Detailed explanation of what needs to be done
+   - Priority: P0 (critical), P1 (high), P2 (medium, default), P3 (low)
+   - Size: XS (<1h), S (1-4h), M (4-8h, default), L (1-3d), XL (3d+)
+   - Tags: Optional comma-separated list
+   - Acceptance criteria: Optional list of completion requirements
 
-# Task: Brief task description
+2. **Generate derived fields**:
+   - `shortname`: Generate from subject (e.g., "Fix auth bug" -> "fix-auth-bug")
+   - `activeForm`: Convert subject to present continuous (e.g., "Fix auth bug" -> "Fixing auth bug")
 
-## Description
-Detailed explanation of what needs to be done, why it's important, and any relevant context.
+3. **Use TaskCreate tool** with:
+   - `subject`: The task title in imperative form
+   - `description`: Include full description. If acceptance criteria provided, append as checklist
+   - `activeForm`: Present continuous form for spinner display
+   - `metadata`: Object containing:
+     - `shortname`: Generated short identifier
+     - `priority`: P0/P1/P2/P3
+     - `size`: XS/S/M/L/XL
+     - `tags`: Array of tag strings
+     - `acceptance_criteria`: Array of `{text: string, completed: boolean}` objects
+     - `created_at`: ISO 8601 timestamp
+     - `updated_at`: ISO 8601 timestamp
 
-## Acceptance Criteria
-- [ ] First acceptance criterion
-- [ ] Second acceptance criterion
-- [ ] All tests pass
-- [ ] Documentation updated
+4. **Display created task summary**
 
-## Technical Details
-Any implementation notes, approaches to consider, or technical constraints.
+## Priority Levels
+- P0: Critical blocker - must be addressed immediately
+- P1: High priority - important work to complete soon
+- P2: Medium priority - standard work (default)
+- P3: Low priority - nice to have, can wait
 
-## Dependencies
-### Blocks (tasks waiting on this)
-- List task IDs or shortnames that depend on this task
-
-### Blocked By (waiting on these)
-- List task IDs or shortnames that must complete first
-
-### External Dependencies
-- Non-task blockers (APIs, documentation, approvals, etc.)
-```
-
-## Priority Levels:
-- P0: Critical blocker
-- P1: High priority
-- P2: Medium priority
-- P3: Low priority
-
-## Size Estimates:
-- XS: < 1 hour
+## Size Estimates
+- XS: Less than 1 hour
 - S: 1-4 hours
-- M: 4-8 hours
+- M: 4-8 hours (default)
 - L: 1-3 days
 - XL: 3+ days
 
-First check for parameters, if not provided, create template and work interactively with user to fill it out.
+## Examples
+
+### With arguments
+```
+/task-add Fix authentication bug causing session timeout
+```
+Creates task with subject "Fix authentication bug causing session timeout", prompts for priority/size/etc.
+
+### Interactive mode
+```
+/task-add
+```
+Prompts for all fields interactively.
+
+## Output Format
+```
+Task Created: #3
+Subject: Fix authentication bug causing session timeout
+Shortname: fix-authentication-bug
+Priority: P1 | Size: M
+Status: pending (ready)
+
+Description:
+Users are experiencing session timeouts...
+
+Acceptance Criteria:
+- [ ] Bug is reproduced
+- [ ] Root cause identified
+- [ ] Fix implemented
+- [ ] Tests added
+```
