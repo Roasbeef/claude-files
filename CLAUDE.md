@@ -91,6 +91,61 @@ Line numbers refer to **new file** lines (what editors display), not old file li
 - Use `hunk preview` to verify the patch looks correct before committing.
 - For focused commits, stage only related changes together.
 
+# Hunk for Programmatic Rebase
+
+Hunk provides non-interactive rebase commands for AI agents who need to manipulate git history without prompts.
+
+**When to use hunk rebase:**
+- Squashing fixup commits into their parent
+- Dropping debug/temporary commits before PR
+- Reordering commits for logical grouping
+- Running commands (tests) between commits during rebase
+
+**Core workflow:**
+```bash
+hunk rebase list --onto main           # See commits to rebase
+hunk rebase run --onto main <actions>  # Execute rebase
+hunk rebase status                     # Check if rebase in progress
+hunk rebase continue                   # Continue after resolving conflicts
+hunk rebase abort                      # Abort and restore original state
+```
+
+**Action syntax (comma-separated):**
+- `pick:abc123` - Keep commit as-is
+- `squash:abc123` - Combine with previous (concat messages)
+- `fixup:abc123` - Combine with previous (discard message)
+- `drop:abc123` - Remove commit from history
+- `reword:abc123:New message` - Change commit message
+- `exec:make test` - Run command after previous commit
+
+**Common patterns:**
+```bash
+# Squash last 2 commits into one
+hunk rebase list --onto main --json  # Get commit hashes
+hunk rebase run --onto main "pick:first,squash:second"
+
+# Drop a debug commit
+hunk rebase run --onto main "pick:a,drop:debug,pick:b"
+
+# Run tests after each commit
+hunk rebase run --onto main "pick:a,exec:make test,pick:b,exec:make test"
+```
+
+**Conflict handling:**
+```bash
+hunk rebase status --json  # Check for conflicts
+# Resolve conflicts manually, then:
+git add <resolved-files>
+hunk rebase continue
+# Or abort:
+hunk rebase abort
+```
+
+**Best practices:**
+- Always use `hunk rebase list --onto <base> --json` first to get exact commit hashes.
+- Use fixup (not squash) when you want to silently fold in typo fixes.
+- Run `hunk rebase status` after run to verify completion.
+
 # Task Management
 - Projects use `.tasks/` directory for task tracking.
 - Run `/task-list` when starting work on any project.
