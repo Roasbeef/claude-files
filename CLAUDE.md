@@ -147,11 +147,28 @@ hunk rebase abort
 - Run `hunk rebase status` after run to verify completion.
 
 # Task Management
-- Projects use `.tasks/` directory for task tracking.
-- Run `/task-list` when starting work on any project.
-- Key commands: `/task-add`, `/task-next`, `/task-complete`, `/task-view`, `/task-status`, `/task-deps`
-- Priorities: P0 (critical) > P1 (high) > P2 (medium) > P3 (low)
-- Sizes: XS (<1h), S (1-4h), M (4-8h), L (1-3d), XL (3d+)
+
+Tasks use Claude Code's built-in task system (TaskCreate, TaskGet, TaskUpdate, TaskList tools).
+
+**Commands:**
+- `/task-list` - List all tasks with optional filters
+- `/task-add` - Create a new task
+- `/task-view` - View detailed task information
+- `/task-next` - Pick and start the next priority task
+- `/task-complete` - Mark a task as completed
+- `/task-status` - Update task status (ready, in_progress, blocked, completed)
+- `/task-deps` - Manage task dependencies and view dependency graph
+
+**Priority levels:** P0 (critical) > P1 (high) > P2 (medium) > P3 (low)
+**Size estimates:** XS (<1h), S (1-4h), M (4-8h), L (1-3d), XL (3d+)
+
+**Status mapping:**
+- `ready` = pending with no blockers
+- `in_progress` = actively being worked
+- `blocked` = pending with blockedBy tasks or blocked_reason set
+- `completed` = finished (stays in list, use filters to hide)
+
+**Metadata schema:** priority, size, tags, shortname, acceptance_criteria, blocked_reason, timestamps
 
 # Session Management
 Sessions provide execution continuity across context compactions and work periods.
