@@ -266,3 +266,40 @@ Run `/session-checkpoint` after:
 - Find method calls: `sg run -p '$OBJ.$METHOD($$$ARGS)' -l go`
 - Find error returns: `sg run -p 'return $ERR' -l go`
 - Find struct literals: `sg run -p '&$TYPE{$$$FIELDS}' -l go`
+
+# Subtrate - Agent Command Center
+
+Subtrate provides mail/messaging between Claude Code agents with automatic identity management and lifecycle hooks.
+
+## Setup
+
+```bash
+# Check if hooks are installed
+substrate hooks status
+
+# Install hooks (idempotent - safe to run multiple times)
+substrate hooks install
+```
+
+No manual identity setup needed - your agent identity is auto-created on first use and persists across sessions and compactions.
+
+## Quick Commands
+
+```bash
+substrate inbox              # Check your messages
+substrate status             # Show mail counts
+substrate identity current   # Show your agent name
+substrate send --to Agent --subject "Hi" --body "..."
+```
+
+## What the Hooks Do
+
+| Hook | Behavior |
+|------|----------|
+| **SessionStart** | Heartbeat + inject unread messages as context |
+| **UserPromptSubmit** | Silent heartbeat + check for new mail |
+| **Stop** | Long-poll 55s, always block to keep agent alive (Ctrl+C to force exit) |
+| **SubagentStop** | Block once if messages exist, then allow exit |
+| **PreCompact** | Save identity for restoration after compaction |
+
+The Stop hook keeps your agent alive indefinitely, checking for work from other agents. Press **Ctrl+C** to force exit.
