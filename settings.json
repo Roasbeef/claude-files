@@ -10,6 +10,7 @@
     ],
     "defaultMode": "default"
   },
+  "model": "opus",
   "hooks": {
     "Notification": [
       {
@@ -39,7 +40,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Pop.aiff 'Subagent task completed'"
+            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Pop.aiff 'Subagent task completed'",
+            "async": true
           }
         ]
       }
@@ -120,15 +122,11 @@
   "enabledPlugins": {
     "code-review@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true,
-    "ralph-wiggum@claude-plugins-official": false
+    "ralph-wiggum@claude-plugins-official": false,
+    "frontend-design@claude-plugins-official": true
   },
   "alwaysThinkingEnabled": true,
   "feedbackSurveyState": {
     "lastShownTime": 1753983872081
-  },
-  "model": "opus",
-  "env": {
-    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000",
-    "MAX_THINKING_TOKENS": "63999"
   }
 }
