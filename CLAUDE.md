@@ -291,6 +291,40 @@ Run `/session-checkpoint` after:
 
 Subtrate provides mail/messaging between Claude Code agents with automatic identity management and lifecycle hooks.
 
+## Quick Start - Use the /substrate Skill
+
+The easiest way to use Subtrate is via the `/substrate` skill:
+```
+/substrate inbox           # Check your messages
+/substrate status          # Show mail counts
+/substrate send AgentName  # Send a message
+```
+
+The skill handles session ID and formatting automatically.
+
+## CLI Commands Reference
+
+**IMPORTANT**: Always pass `--session-id "$CLAUDE_SESSION_ID"` to CLI commands, or they will fail with "no agent specified".
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `inbox` | List inbox messages | `substrate inbox --session-id "$CLAUDE_SESSION_ID"` |
+| `read <id>` | Read a specific message | `substrate read 42 --session-id "$CLAUDE_SESSION_ID"` |
+| `send` | Send a new message | `substrate send --session-id "$CLAUDE_SESSION_ID" --to User --subject "Hi" --body "..."` |
+| `status` | Show mail counts | `substrate status --session-id "$CLAUDE_SESSION_ID"` |
+| `poll` | Wait for new messages | `substrate poll --session-id "$CLAUDE_SESSION_ID" --wait=30s` |
+| `heartbeat` | Send liveness signal | `substrate heartbeat --session-id "$CLAUDE_SESSION_ID"` |
+| `identity current` | Show your agent name | `substrate identity current --session-id "$CLAUDE_SESSION_ID"` |
+
+**There is NO `reply` command** - to reply, use `send` with the sender as recipient:
+```bash
+# Read message #42 from AgentX, then reply:
+substrate send --session-id "$CLAUDE_SESSION_ID" \
+  --to AgentX \
+  --subject "Re: Original Subject" \
+  --body "Your reply here..."
+```
+
 ## Setup
 
 ```bash
@@ -303,15 +337,6 @@ substrate hooks install
 
 No manual identity setup needed - your agent identity is auto-created on first use and persists across sessions and compactions.
 
-## Quick Commands
-
-```bash
-substrate inbox              # Check your messages
-substrate status             # Show mail counts
-substrate identity current   # Show your agent name
-substrate send --to Agent --subject "Hi" --body "..."
-```
-
 ## What the Hooks Do
 
 | Hook | Behavior |
@@ -323,3 +348,62 @@ substrate send --to Agent --subject "Hi" --body "..."
 | **PreCompact** | Save identity for restoration after compaction |
 
 The Stop hook keeps your agent alive indefinitely, checking for work from other agents. Press **Ctrl+C** to force exit.
+
+## When Stop Hook Shows Mail (ACTION REQUIRED)
+
+**CRITICAL**: When the stop hook blocks with "You have X unread messages", you MUST:
+
+1. **Read your mail immediately**:
+   ```bash
+   substrate inbox --session-id "$CLAUDE_SESSION_ID"
+   ```
+
+2. **Process each message** - read the full content with `substrate read <id> --session-id "$CLAUDE_SESSION_ID"`
+
+3. **Respond or act** on what's requested in the messages
+
+4. **Only then** should you wait for the next user request
+
+**DO NOT** just say "Standing by" or "Ready" when you have mail - this ignores messages from other agents who need your help!
+
+**Example flow when stop hook shows mail:**
+```
+Stop hook: "You have 1 unread message from AgentX"
+→ Run: substrate inbox --session-id "$CLAUDE_SESSION_ID"
+→ Run: substrate read 42 --session-id "$CLAUDE_SESSION_ID"
+→ Process the request in the message
+→ Reply if needed: substrate send --session-id "$CLAUDE_SESSION_ID" --to AgentX --subject "Re: ..." --body "Done!"
+```
+
+## Agent Message Context (IMPORTANT)
+
+When sending messages via Subtrate, **ALWAYS** include a brief context intro so recipients understand your situation:
+
+**Format:**
+```
+[Context: Working on <project> in <directory>, branch: <branch>]
+[Current task: <brief description of what you're doing>]
+
+<actual message body>
+```
+
+**Example:**
+```
+[Context: Working on subtrate in ~/gocode/src/github.com/roasbeef/subtrate, branch: main]
+[Current task: Implementing gRPC integration tests]
+
+Hi, I need help with the test harness setup. The embedded server starts
+correctly but I'm not sure how to configure the notification hub...
+```
+
+**Why this matters:**
+- Recipients see multiple agents across different projects
+- Context helps them understand your situation without asking
+- Makes replies more relevant and helpful
+- Essential for async communication between agents
+
+**Include in your context:**
+- Project name and directory
+- Current git branch
+- What task or goal you're working on
+- Any relevant blockers or decisions needed
