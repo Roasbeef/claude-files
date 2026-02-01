@@ -170,6 +170,26 @@ Tasks use Claude Code's built-in task system (TaskCreate, TaskGet, TaskUpdate, T
 
 **Metadata schema:** priority, size, tags, shortname, acceptance_criteria, blocked_reason, timestamps
 
+## Task Completion Integrity (CRITICAL)
+
+**NEVER mark a task as complete prematurely.** A task is only complete when ALL acceptance criteria are met and the work is fully verified.
+
+**Before marking any task complete:**
+1. Verify ALL acceptance criteria are satisfied
+2. Ensure tests pass (if applicable)
+3. Confirm the feature/fix works end-to-end
+4. Do NOT mark complete just to bypass stop hooks or other blockers
+
+**If a stop hook or blocker prevents you from stopping:**
+- This is by design - complete the remaining work
+- Ask the user if you're unsure what remains
+- NEVER mark tasks complete just to satisfy hook requirements
+
+**If you cannot complete a task:**
+- Leave it as `in_progress` or `pending`
+- Log what remains with `/session-log --progress "Partial: ..."`
+- Ask the user for guidance
+
 # Session Management
 Sessions provide execution continuity across context compactions and work periods.
 See `~/.claude/SESSIONS.md` for full documentation.
