@@ -1,4 +1,164 @@
 {
+  "alwaysThinkingEnabled": true,
+  "enabledPlugins": {
+    "code-review@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true,
+    "ralph-wiggum@claude-plugins-official": false
+  },
+  "feedbackSurveyState": {
+    "lastShownTime": 1753983872081
+  },
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Submarine.aiff 'Claude has a notification for you'",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [],
+        "matcher": ""
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "/Users/roasbeef/.claude/hooks/precompact/save_important_context.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      },
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/substrate/pre_compact.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [],
+        "matcher": ""
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [],
+        "matcher": ""
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "/Users/roasbeef/.claude/hooks/sessionstart/load_project_context.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      },
+      {
+        "hooks": [
+          {
+            "command": "echo 'POST-COMPACTION: You MUST immediately run /session-resume to restore session context before doing anything else.'",
+            "type": "command"
+          }
+        ],
+        "matcher": "compact"
+      },
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/substrate/session_start.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Ping.aiff 'Claude has finished responding'",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      },
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/substrate/stop.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Pop.aiff 'Subagent task completed'",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      },
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/substrate/subagent_stop.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "/Users/roasbeef/.claude/hooks/ultrathink_hook.py",
+            "type": "command"
+          },
+          {
+            "command": "/Users/roasbeef/.claude/hooks/userpromptsubmit/context_enhancer.py",
+            "type": "command"
+          },
+          {
+            "command": "/Users/roasbeef/.claude/hooks/userpromptsubmit/session_context.py",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      },
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/substrate/user_prompt.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ]
+  },
+  "model": "opus",
   "permissions": {
     "allow": [
       "Bash(npx uuid v7)",
@@ -8,125 +168,15 @@
       "Bash(bun --version:*)",
       "WebSearch"
     ],
-    "defaultMode": "default"
-  },
-  "model": "opus",
-  "hooks": {
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Submarine.aiff 'Claude has a notification for you'"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Ping.aiff 'Claude has finished responding'"
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Pop.aiff 'Subagent task completed'",
-            "async": true
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/roasbeef/.claude/hooks/ultrathink_hook.py"
-          },
-          {
-            "type": "command",
-            "command": "/Users/roasbeef/.claude/hooks/userpromptsubmit/context_enhancer.py"
-          },
-          {
-            "type": "command",
-            "command": "/Users/roasbeef/.claude/hooks/userpromptsubmit/session_context.py"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "",
-        "hooks": []
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "",
-        "hooks": []
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/roasbeef/.claude/hooks/sessionstart/load_project_context.sh"
-          }
-        ]
-      },
-      {
-        "matcher": "compact",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo 'POST-COMPACTION: You MUST immediately run /session-resume to restore session context before doing anything else.'"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "matcher": "",
-        "hooks": []
-      }
-    ],
-    "PreCompact": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/roasbeef/.claude/hooks/precompact/save_important_context.sh"
-          }
-        ]
-      }
+    "defaultMode": "default",
+    "deny": [
+      "Bash(rm*~/.claude/tasks/*)",
+      "Bash(rm*/.claude/tasks/*)",
+      "Bash(*rm*tasks/*.json*)"
     ]
   },
   "statusLine": {
-    "type": "command",
-    "command": "input=$(cat); cwd=\"$(echo \"$input\" | jq -r '.workspace.current_dir')\"; model=\"$(echo \"$input\" | jq -r '.model.display_name')\"; if [ -d \"$cwd/.git\" ]; then cd \"$cwd\" 2>/dev/null && branch=$(git branch --show-current 2>/dev/null); if [ -n \"$branch\" ]; then git_info=\" [$branch]\"; else git_info=\" [detached]\"; fi; changes=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' '); if [ \"$changes\" -gt 0 ]; then git_info=\"$git_info *\"; fi; else git_info=\"\"; fi; printf \"⛰ %s | %s%s | %s\" \"$(whoami)\" \"$(basename \"$cwd\")\" \"$git_info\" \"$model\""
-  },
-  "enabledPlugins": {
-    "code-review@claude-plugins-official": true,
-    "gopls-lsp@claude-plugins-official": true,
-    "ralph-wiggum@claude-plugins-official": false,
-    "frontend-design@claude-plugins-official": true
-  },
-  "alwaysThinkingEnabled": true,
-  "feedbackSurveyState": {
-    "lastShownTime": 1753983872081
+    "command": "input=$(cat); cwd=\"$(echo \"$input\" | jq -r '.workspace.current_dir')\"; model=\"$(echo \"$input\" | jq -r '.model.display_name')\"; if [ -d \"$cwd/.git\" ]; then cd \"$cwd\" 2\u003e/dev/null \u0026\u0026 branch=$(git branch --show-current 2\u003e/dev/null); if [ -n \"$branch\" ]; then git_info=\" [$branch]\"; else git_info=\" [detached]\"; fi; changes=$(git status --porcelain 2\u003e/dev/null | wc -l | tr -d ' '); if [ \"$changes\" -gt 0 ]; then git_info=\"$git_info *\"; fi; else git_info=\"\"; fi; printf \"⛰ %s | %s%s | %s\" \"$(whoami)\" \"$(basename \"$cwd\")\" \"$git_info\" \"$model\"",
+    "type": "command"
   }
 }
