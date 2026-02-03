@@ -10,17 +10,7 @@
     "lastShownTime": 1753983872081
   },
   "hooks": {
-    "Notification": [
-      {
-        "hooks": [
-          {
-            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Submarine.aiff 'Claude has a notification for you'",
-            "type": "command"
-          }
-        ],
-        "matcher": ""
-      }
-    ],
+    "Notification": [],
     "PostToolUse": [
       {
         "hooks": [],
@@ -92,16 +82,6 @@
       {
         "hooks": [
           {
-            "async": true,
-            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Ping.aiff 'Claude has finished responding'",
-            "type": "command"
-          }
-        ],
-        "matcher": ""
-      },
-      {
-        "hooks": [
-          {
             "command": "~/.claude/hooks/substrate/stop.sh",
             "type": "command"
           }
@@ -110,15 +90,6 @@
       }
     ],
     "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "command": "/Users/roasbeef/.claude/notify-enhanced.sh /System/Library/Sounds/Pop.aiff 'Subagent task completed'",
-            "type": "command"
-          }
-        ],
-        "matcher": ""
-      },
       {
         "hooks": [
           {
@@ -166,6 +137,7 @@
       "Bash(git rev-parse:*)",
       "Bash(mkdir:*)",
       "Bash(bun --version:*)",
+      "Bash(substrate:*)",
       "WebSearch"
     ],
     "defaultMode": "default",
