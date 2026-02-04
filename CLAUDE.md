@@ -343,7 +343,7 @@ No manual identity setup needed - your agent identity is auto-created on first u
 |------|----------|
 | **SessionStart** | Heartbeat + inject unread messages as context |
 | **UserPromptSubmit** | Silent heartbeat + check for new mail |
-| **Stop** | Long-poll 55s, always block to keep agent alive (Ctrl+C to force exit) |
+| **Stop** | Long-poll 9m30s, always block to keep agent alive (Ctrl+C to force exit) |
 | **SubagentStop** | Block once if messages exist, then allow exit |
 | **PreCompact** | Save identity for restoration after compaction |
 
