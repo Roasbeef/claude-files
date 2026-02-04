@@ -10,7 +10,6 @@
     "lastShownTime": 1753983872081
   },
   "hooks": {
-    "Notification": [],
     "PostToolUse": [
       {
         "hooks": [],
@@ -83,6 +82,7 @@
         "hooks": [
           {
             "command": "~/.claude/hooks/substrate/stop.sh",
+            "timeout": 600,
             "type": "command"
           }
         ],
@@ -140,12 +140,37 @@
       "Bash(substrate:*)",
       "WebSearch"
     ],
-    "defaultMode": "default",
+    "defaultMode": "bypassPermissions",
     "deny": [
       "Bash(rm*~/.claude/tasks/*)",
       "Bash(rm*/.claude/tasks/*)",
       "Bash(*rm*tasks/*.json*)"
     ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "excludedCommands": ["docker", "git"],
+    "allowUnsandboxedCommands": true,
+    "network": {
+      "allowedDomains": [
+        "github.com",
+        "api.github.com",
+        "*.golang.org",
+        "proxy.golang.org",
+        "sum.golang.org",
+        "pkg.go.dev",
+        "*.npmjs.org",
+        "registry.npmjs.org",
+        "*.pypi.org",
+        "pypi.org"
+      ],
+      "allowUnixSockets": [
+        "/var/run/docker.sock",
+        "/Users/roasbeef/.gnupg/S.gpg-agent.ssh"
+      ],
+      "allowLocalBinding": true
+    }
   },
   "statusLine": {
     "command": "input=$(cat); cwd=\"$(echo \"$input\" | jq -r '.workspace.current_dir')\"; model=\"$(echo \"$input\" | jq -r '.model.display_name')\"; if [ -d \"$cwd/.git\" ]; then cd \"$cwd\" 2\u003e/dev/null \u0026\u0026 branch=$(git branch --show-current 2\u003e/dev/null); if [ -n \"$branch\" ]; then git_info=\" [$branch]\"; else git_info=\" [detached]\"; fi; changes=$(git status --porcelain 2\u003e/dev/null | wc -l | tr -d ' '); if [ \"$changes\" -gt 0 ]; then git_info=\"$git_info *\"; fi; else git_info=\"\"; fi; printf \"⛰ %s | %s%s | %s\" \"$(whoami)\" \"$(basename \"$cwd\")\" \"$git_info\" \"$model\"",
