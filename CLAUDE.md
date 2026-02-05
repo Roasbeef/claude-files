@@ -1,32 +1,19 @@
-# Context Management
+# Context Management & Compaction Recovery
 
 Your context window will be automatically compacted as it approaches its limit,
-allowing you to continue working indefinitely from where you left off.
-Therefore, do not stop tasks early due to token budget concerns. As you
-approach your token budget limit, save your current progress and state to
-memory before the context window refreshes. Always be as persistent and
-autonomous as possible and complete tasks fully, even if the end of your budget
-is approaching. Never artificially stop any task early regardless of the
-context remaining.
+allowing you to continue working indefinitely. Do not stop tasks early due to
+token budget concerns. Always be as persistent and autonomous as possible and
+complete tasks fully.
 
-# Post-Compaction Recovery (CRITICAL)
+**After context compaction, your FIRST action MUST be `/session-resume`.**
+Do NOT respond to the user's request until you have run it.
 
-After context compaction, your FIRST action MUST be:
-```
-/session-resume
-```
-
-Do NOT respond to the user's request until you have run `/session-resume`.
-
-**Signs you just experienced compaction:**
+Signs compaction just occurred:
 - The conversation feels "fresh" but user expects you to continue work
 - SessionStart hook shows an active session with compaction_count > 0
 - User says "continue", "keep going", "where were we"
 
-**If unsure whether compaction occurred, check:**
-```bash
-ls .sessions/active/  # If files exist, run /session-resume
-```
+If unsure, check: `ls .sessions/active/` -- if files exist, run `/session-resume`.
 
 # Coding Style
 - For comments, always use complete sentences ending with a period.
@@ -57,6 +44,13 @@ Do not make autonomous choices for non-trivial cases in these categories:
 # Git & PRs
 - Don't include "Generated with Claude Code" or "Co-Authored-By: Claude" in commit messages or PR bodies.
 - Don't add any AI attribution footers to commits or PRs.
+
+# Sandbox TLS Fix
+
+When `gh`, `git`, `go`, or other CLI commands fail with TLS/x509/certificate errors
+(including `OSStatus -26276` or `certificate is not trusted`), immediately retry the
+command with `dangerouslyDisableSandbox: true`. The macOS sandbox blocks access to
+the Security framework's certificate chain verification via Mach IPC.
 
 # Hunk for Precision Staging
 
@@ -146,31 +140,7 @@ hunk rebase abort
 - Use fixup (not squash) when you want to silently fold in typo fixes.
 - Run `hunk rebase status` after run to verify completion.
 
-# Task Management
-
-Tasks use Claude Code's built-in task system (TaskCreate, TaskGet, TaskUpdate, TaskList tools).
-
-**Commands:**
-- `/task-list` - List all tasks with optional filters
-- `/task-add` - Create a new task
-- `/task-view` - View detailed task information
-- `/task-next` - Pick and start the next priority task
-- `/task-complete` - Mark a task as completed
-- `/task-status` - Update task status (ready, in_progress, blocked, completed)
-- `/task-deps` - Manage task dependencies and view dependency graph
-
-**Priority levels:** P0 (critical) > P1 (high) > P2 (medium) > P3 (low)
-**Size estimates:** XS (<1h), S (1-4h), M (4-8h), L (1-3d), XL (3d+)
-
-**Status mapping:**
-- `ready` = pending with no blockers
-- `in_progress` = actively being worked
-- `blocked` = pending with blockedBy tasks or blocked_reason set
-- `completed` = finished (stays in list, use filters to hide)
-
-**Metadata schema:** priority, size, tags, shortname, acceptance_criteria, blocked_reason, timestamps
-
-## Task Completion Integrity (CRITICAL)
+# Task Completion Integrity (CRITICAL)
 
 **NEVER mark a task as complete prematurely.** A task is only complete when ALL acceptance criteria are met and the work is fully verified.
 
@@ -289,7 +259,7 @@ Run `/session-checkpoint` after:
 
 # Subtrate - Agent Command Center
 
-Subtrate provides mail/messaging between Claude Code agents with automatic identity management and lifecycle hooks.
+Subtrate provides mail/messaging between Claude Code agents with automatic identity management and lifecycle hooks. **Subtrate is the primary way to communicate with the user** -- when you need to reach the user or send status updates, use Subtrate mail rather than just printing to the console.
 
 ## Quick Start - Use the /substrate Skill
 
