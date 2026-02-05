@@ -138,6 +138,10 @@
       "Bash(mkdir:*)",
       "Bash(bun --version:*)",
       "Bash(substrate:*)",
+      "Bash(bun run test:e2e*)",
+      "Bash(make bun-test-e2e*)",
+      "Bash(playwright test*)",
+      "Bash(npx playwright*)",
       "WebSearch"
     ],
     "defaultMode": "bypassPermissions",
@@ -150,8 +154,28 @@
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
-    "excludedCommands": ["docker", "git"],
+    "excludedCommands": ["docker", "git", "gh", "npx playwright", "bun run test:e2e"],
     "allowUnsandboxedCommands": true,
+    "filesystem": {
+      "write": {
+        "allowOnly": [
+          "/dev/stdout",
+          "/dev/stderr",
+          "/dev/null",
+          "/dev/tty",
+          "/dev/dtracehelper",
+          "/dev/autofs_nowait",
+          "/tmp/claude",
+          "/private/tmp/claude",
+          "/Users/roasbeef/.npm/_logs",
+          "/Users/roasbeef/.claude/debug",
+          ".",
+          "/private/tmp/claude-501/",
+          "/Users/roasbeef/Library/Caches/ms-playwright",
+          "/var/folders"
+        ]
+      }
+    },
     "network": {
       "allowedDomains": [
         "github.com",
