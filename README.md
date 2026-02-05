@@ -1,524 +1,241 @@
-# Advanced Claude Code Configuration with Task Management System
+# Claude Code Configuration
 
-This repository contains a sophisticated Claude Code setup that extends the base capabilities with specialized sub-agents, custom commands, automated hooks, and a comprehensive task management system. The configuration demonstrates how Claude Code can be transformed from a general-purpose AI assistant into a highly specialized development environment tailored for complex software engineering workflows.
-
-## Overview
-
-Claude Code is Anthropic's AI-powered development assistant that runs directly in your terminal. While powerful out of the box, its true potential emerges through customization. This configuration showcases an advanced setup that includes:
-- **Task Management System**: Lightweight, dependency-aware task tracking
-- **Specialized Sub-agents**: Deep code analysis with parallel processing
-- **Custom Commands**: Common workflows and task operations
-- **Automated Hooks**: Real-time feedback and enhanced reasoning
-
-The architecture leverages Claude Code's ability to spawn parallel sub-agents, each with their own context window and specialized expertise. This allows for complex, multi-threaded analysis while preserving the main conversation context.
-
-## Task Management System
-
-A comprehensive task management system enables systematic work tracking across all projects. Tasks are stored as markdown files with YAML frontmatter in project `.tasks/` directories.
-
-### Features
-- **Dependency Management**: Automatic blocking/unblocking of tasks
-- **Priority-based Selection**: Smart task ordering (P0-P3)
-- **Size Estimation**: XS to XL effort tracking
-- **Multi-agent Support**: Assignee field for collaboration
-- **Shell Integration**: Aliases for quick access
-
-### Directory Structure
-```
-project/
-└── .tasks/
-    ├── active/      # Current tasks (shortname-uuid.md)
-    ├── archive/     # Completed tasks
-    └── templates/   # Task templates
-```
-
-### Quick Start
-
-#### Shell Setup (Already configured in ~/.zshrc)
-```bash
-# Available aliases:
-tasks           # List tasks in current project
-all-tasks       # Find all projects with tasks
-task-cd         # Navigate to .tasks/active
-task-cat <id>   # View specific task
-task-status     # Quick summary
-
-# Scripts available globally:
-~/.claude/scripts/list-tasks.sh [dir]      # List project tasks
-~/.claude/scripts/list-all-tasks.sh [dir]  # Find all projects
-```
-
-#### Claude Commands
-```bash
-/task-list              # See all tasks with status
-/task-next              # Pick highest priority task
-/task-add               # Create new task interactively
-/task-view <id>         # View task details
-/task-status <id> <st>  # Update task status
-/task-complete <id>     # Mark complete & archive
-/task-deps <action>     # Manage dependencies
-```
-
-### Task Structure
-
-```yaml
----
-id: 01999792-af4f-70fb-9deb-dc96846b3c83  # UUIDv7
-shortname: fix-auth-bug
-title: Fix authentication bug in login flow
-priority: P1        # P0=critical, P1=high, P2=medium, P3=low
-size: M            # XS=<1hr, S=1-4hr, M=4-8hr, L=1-3d, XL=3+d
-status: ready      # ready|in_progress|blocked|completed
-tags: [security, auth]
-blocks: [deploy-prod]          # Tasks that depend on this
-blocked_by: [update-api]       # Tasks this depends on
-assignee:
-created_at: 2025-01-29T23:24:00Z
-updated_at: 2025-01-29T23:24:00Z
----
-
-# Task: Fix authentication bug in login flow
-
-## Description
-Detailed explanation...
-
-## Acceptance Criteria
-- [ ] Bug reproduced
-- [ ] Fix implemented
-- [ ] Tests added
-
-## Technical Details
-Implementation notes...
-
-## Dependencies
-### Blocks: [deploy-prod]
-### Blocked By: [update-api]
-```
-
-### Dependency System
-
-Tasks track two types of dependencies:
-- **blocks**: Tasks waiting for this one to complete
-- **blocked_by**: Tasks that must complete before this one
-
-The system automatically:
-- Prevents starting blocked tasks
-- Prioritizes tasks that unblock others
-- Detects circular dependencies
-- Shows dependency graphs with `/task-deps graph`
-
-### Task Selection Algorithm
-
-When using `/task-next`, tasks are selected by:
-1. Exclude blocked tasks (unmet dependencies)
-2. Resume any in_progress work
-3. Priority order: P0 > P1 > P2 > P3
-4. Within priority: prefer smaller tasks (quick wins)
-5. Prefer tasks that unblock others
-6. Break ties by creation date (FIFO)
-
-## Session Management System
-
-Sessions provide execution continuity across context compactions and work periods. When Claude's context window compacts, sessions preserve your progress, decisions, and discoveries so work can resume seamlessly.
-
-### Why Sessions?
-
-Claude Code automatically compacts its context when approaching token limits. Without sessions:
-- You lose track of what you were doing
-- Decisions and their rationale are forgotten
-- Discoveries made during work are lost
-- Time is wasted re-understanding the codebase
-
-Sessions create a **living document** that survives compactions and enables rapid context restoration.
-
-### Directory Structure
-```
-project/
-└── .sessions/
-    ├── active/           # Currently active sessions
-    ├── archive/          # Completed/closed sessions
-    └── journal/          # Per-session execution logs
-```
-
-### Quick Start
-
-#### Session Lifecycle
-```
-/session-init  →  (active work)  →  /session-close --complete
-                       ↓
-                 (compaction)
-                       ↓
-               /session-resume
-```
-
-#### Claude Commands
-```bash
-/session-init               # Start new session (optionally link to task)
-/session-resume             # Resume after compaction
-/session-log                # Add progress/decision/discovery entries
-/session-checkpoint         # Save explicit checkpoint
-/session-view               # View session details
-/session-pause              # Pause with checkpoint
-/session-close --complete   # Complete and archive session
-```
-
-### Logging During Work
-
-Sessions work best when Claude logs as it works:
-
-```bash
-# Log decisions with rationale
-/session-log --decision "Using mutex over channels" --rationale="simpler for this case"
-
-# Log discoveries
-/session-log --discovery "Lock ordering: chain_watcher must lock before sweeper"
-
-# Log progress
-/session-log --progress "Implemented fix in sweeper.go:245-260"
-
-# Log blockers
-/session-log --blocker "Need API clarification from team"
-```
-
-### Relationship to Tasks
-
-Sessions and tasks are complementary:
-
-| Aspect | Tasks (.tasks/) | Sessions (.sessions/) |
-|--------|-----------------|----------------------|
-| Purpose | What to do | How work progresses |
-| Lifetime | Project lifetime | Single work effort |
-| Granularity | Feature/bug level | Execution level |
-| Survives | Project history | Compactions |
-
-**Best practice**: Link sessions to tasks with `/session-init --task=<id>`.
-
-### Hooks Integration
-
-Sessions integrate with the hooks system:
-- **PreCompact Hook**: Auto-saves session state before compaction
-- **SessionStart Hook**: Displays active session TL;DR on startup
-- **UserPromptSubmit Hook**: Detects "continue"/"resume" and injects context
-
-For complete documentation, see [SESSIONS.md](SESSIONS.md).
+An advanced Claude Code setup with specialized sub-agents, skills, custom commands, automated hooks, session management, and inter-agent messaging via Subtrate. Tailored for complex software engineering workflows, particularly Bitcoin/Lightning Network development.
 
 ## Architecture
 
 ```mermaid
 graph TB
-    %% Core System
     Main[Claude Code Core]
-    
-    %% Built-in Tools
-    subgraph Tools["Built-in Tools"]
+
+    subgraph NativeTools["Native Tools"]
         direction LR
-        T1[Read/Write]
-        T2[Bash]
-        T3[Search]
+        NT1[TaskCreate/Update/List]
+        NT2[Read/Write/Edit]
+        NT3[Bash/Grep/Glob]
     end
-    
-    %% Sub-Agents Layer
-    subgraph Agents["Specialized Sub-Agents"]
+
+    subgraph Skills["Skills"]
         direction LR
-        AA[Architecture<br/>Archaeologist]
-        CS[Code<br/>Scout]
-        CR[Code<br/>Reviewer]
-        SA[Security<br/>Auditor]
-        TE[Test<br/>Engineer]
-        DD[Documentation<br/>Double-Checker]
-        GD[Go<br/>Debugger]
-        DC2[Debug<br/>Chronicler]
+        S1[lnd]
+        S2[eclair]
+        S3[substrate]
+        S4[nano-banana]
+        S5[mutation-testing]
+        S6[frontend-design]
     end
-    
-    %% Commands Layer
+
+    subgraph Agents["Sub-Agents"]
+        direction LR
+        AA[Arch Archaeologist]
+        CS[Code Scout]
+        CR[Code Reviewer]
+        SA[Security Auditor]
+        TE[Test Engineer]
+        DD[Doc Checker]
+        GD[Go Debugger]
+        DC2[Debug Chronicler]
+        MT[Mutation Tester]
+        PB[Presentation Builder]
+    end
+
     subgraph Commands["Custom Commands"]
         direction LR
-        IC[Incremental<br/>Commit]
-        PR[Pre-PR<br/>Review]
-        CD[Code<br/>Deep Dive]
-        QD[Quick<br/>Dive]
-        TF[Test<br/>Forge]
-        BR[Batch<br/>Review]
-        DC[Doc<br/>Check]
-        CF[Chronicle<br/>Fix]
+        IC[Incremental Commit]
+        PR[Pre-PR Review]
+        TF[Test Forge]
+        QD[Quick Dive]
         ID[Ideate]
     end
-    
-    %% Hooks System
-    subgraph Hooks["Event Hooks"]
+
+    subgraph Infra["Infrastructure"]
         direction LR
-        UT[Ultrathink<br/>-u flag]
-        NH[Notifications]
-        SH[Stop Alerts]
+        Sub[Subtrate Messaging]
+        Ses[Session System]
+        Hooks[Hook System]
     end
-    
-    %% Connections - organized to minimize crossings
-    Main --> Tools
+
+    Main --> NativeTools
+    Main ==> Skills
     Main ==> Agents
     Main ==> Commands
-    
-    %% Hook interactions
-    UT -.->|enhances| Main
-    Main -.->|triggers| NH
-    Main -.->|triggers| SH
-    Agents -.->|completion| SH
-    
-    %% Styling
+    Infra -.->|lifecycle| Main
+
     classDef core fill:#e1bee7,stroke:#4a148c,stroke-width:3px,color:#000
     classDef agents fill:#c5cae9,stroke:#1a237e,stroke-width:2px,color:#000
     classDef commands fill:#b2dfdb,stroke:#004d40,stroke-width:2px,color:#000
     classDef hooks fill:#ffccbc,stroke:#bf360c,stroke-width:2px,color:#000
     classDef tools fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
-    
+    classDef skills fill:#dcedc8,stroke:#33691e,stroke-width:2px,color:#000
+
     class Main core
-    class AA,CS,CR,SA,TE,DD,GD,DC2 agents
-    class IC,PR,CD,QD,TF,BR,DC,CF,ID commands
-    class UT,NH,SH hooks
-    class T1,T2,T3 tools
+    class AA,CS,CR,SA,TE,DD,GD,DC2,MT,PB agents
+    class IC,PR,TF,QD,ID commands
+    class Sub,Ses,Hooks hooks
+    class NT1,NT2,NT3 tools
+    class S1,S2,S3,S4,S5,S6 skills
 ```
 
-## Components
+## Skills
 
-### Sub-Agents
+Domain-specific toolkits invoked via `/skill-name`:
 
-The configuration includes eight specialized sub-agents, each designed for specific analytical tasks. These agents operate in separate context windows, allowing them to perform deep analysis without consuming the main conversation's context budget.
+| Skill | Description |
+|-------|-------------|
+| `lnd` | Lightning Network Daemon - Docker containers, RPC endpoints, channel management |
+| `eclair` | ACINQ's Eclair - Docker containers, API endpoints, payment channels |
+| `substrate` | Agent mail system - inbox, send, reply, identity management |
+| `nano-banana` | AI image generation via Gemini/Imagen 3 |
+| `mutation-testing` | Validate test quality through mutation analysis |
+| `frontend-design` | Production-grade UI components with high design quality |
+| `slide-creator` | Transform written content into slide deck images |
+| `skill-creator` | Meta-skill for creating new skills |
+| `lnget` | Lightning Network data retrieval |
 
-#### Architecture Archaeologist
+## Sub-Agents
 
-The **Architecture Archaeologist** (`agents/architecture-archaeologist.md`) serves as your codebase cartographer. When invoked, it launches multiple parallel investigations to analyze different aspects of your code simultaneously. It excels at generating comprehensive documentation with Mermaid diagrams, tracing call graphs, identifying architectural patterns, and synthesizing findings into cohesive reports. This agent is particularly valuable when onboarding new team members or documenting legacy systems.
+Specialized agents that run in separate context windows for deep analysis:
 
-#### Code Scout
+| Agent | Purpose |
+|-------|---------|
+| Architecture Archaeologist | Comprehensive codebase analysis with Mermaid diagrams |
+| Code Scout | Fast targeted analysis (2-3 min), max 10 files |
+| Code Reviewer | PR and code change review with pattern analysis |
+| Security Auditor | Vulnerability identification and security hardening |
+| Test Engineer | Test generation with property-based testing and fuzzing |
+| Documentation Double-Checker | Verify documentation accuracy against codebase |
+| Go Debugger | Interactive debugging with Delve and tmux |
+| Debug Chronicler | Transform debugging sessions into structured runbooks |
+| Mutation Tester | Mutation testing for code quality verification |
+| Presentation Builder | Slide creation and presentation design |
 
-The **Code Scout** (`agents/code-scout.md`) is the speed-focused counterpart to the Architecture Archaeologist. When you need quick answers about specific code areas without waiting for comprehensive analysis, the Code Scout delivers targeted insights in 2-3 minutes. It operates with strict constraints: analyzing a maximum of 10 files, producing summaries under 1000 words, and focusing only on what's necessary to answer your specific question. This agent is ideal for debugging sessions, quick code navigation, or understanding specific flows without the overhead of deep architectural analysis.
+## Custom Commands
 
-#### Code Reviewer
+Reusable workflows invoked by name:
 
-The **Code Reviewer** (`agents/code-reviewer.md`) specializes in examining pull requests and code changes with the scrutiny of an experienced engineer. It analyzes not just the code itself but also the surrounding context, checking for consistency with existing patterns, identifying potential bugs, and suggesting improvements. The agent understands the nuances of distributed systems and can spot subtle issues that automated linters might miss.
+| Category | Commands |
+|----------|----------|
+| **Analysis** | `/quick-dive`, `/code-deep-dive`, `/code-review`, `/focused-review` |
+| **Testing** | `/test-forge`, `/fuzz-test`, `/mutation-testing` |
+| **Review** | `/pre-pr-review`, `/batch-review`, `/security-review`, `/security-audit` |
+| **Git** | `/incremental-commit`, `/resolve-pr-comments` |
+| **Planning** | `/ideate`, `/issue-plan` |
+| **Docs** | `/doc-check`, `/chronicle-fix` |
+| **Sessions** | `/session-init`, `/session-resume`, `/session-log`, `/session-checkpoint`, `/session-pause`, `/session-close`, `/session-view` |
 
-#### Security Auditor
+## Hooks
 
-The **Security Auditor** (`agents/security-auditor.md`) brings a security-first perspective to code analysis. It identifies vulnerabilities, reviews authentication flows, checks for common security antipatterns, and provides actionable recommendations. This agent is essential for maintaining secure coding practices and can be integrated into your development workflow as a pre-commit security check.
+Shell scripts that execute at Claude Code lifecycle events:
 
-#### Test Engineer
+### Substrate Hooks (Agent Messaging)
+- **SessionStart**: Heartbeat + inject unread messages
+- **UserPromptSubmit**: Silent heartbeat + check for new mail
+- **Stop**: Long-poll 9m30s, keep agent alive for inter-agent work
+- **SubagentStop**: One-shot mail check, then allow exit
+- **PreCompact**: Save identity for restoration after compaction
 
-The **Test Engineer** (`agents/test-engineer.md`) specializes in comprehensive test generation using advanced techniques. It analyzes code coverage to identify gaps, creates property-based tests using the rapid framework, designs sophisticated fuzz tests that go beyond simple encode/decode, and builds reusable test harnesses for maintainability. The agent can both generate new test suites from scratch and enhance existing tests, using multiple refinement passes to optimize test quality and coverage. It's particularly effective for complex business logic, state machines, and systems requiring high reliability.
+### Context Hooks
+- **SessionStart** (`load_project_context.sh`): Load project context and active sessions
+- **UserPromptSubmit** (`context_enhancer.py`): Add intelligent context based on keywords
+- **UserPromptSubmit** (`ultrathink_hook.py`): Enhanced reasoning when prompt ends with `-u`
+- **PreCompact** (`save_important_context.sh`): Archive context before compaction
 
-#### Documentation Double-Checker
+## Session Management
 
-The **Documentation Double-Checker** (`agents/documentation-double-checker.md`) ensures documentation accuracy by verifying all claims against the actual codebase. It launches parallel verification agents to check file paths, function signatures, code examples, architectural descriptions, and mermaid diagrams. When discrepancies are found, it automatically generates corrected versions and provides detailed verification reports. This agent is automatically invoked by the Architecture Archaeologist after documentation generation, but can also be used standalone to verify existing documentation.
+Sessions provide execution continuity across context compactions. When Claude's context window compacts, sessions preserve progress, decisions, and discoveries for seamless resumption.
 
-#### Go Debugger
-
-The **Go Debugger** (`agents/go-debugger.md`) provides interactive debugging capabilities for Go programs using Delve (dlv) and tmux. It creates isolated debugging sessions where it can set breakpoints, step through code, inspect variables and goroutines, and analyze program state in real-time. The agent uses sophisticated event-based synchronization with `tmux wait-for` signals and file-based output monitoring to maintain tight control over the debugging session. This eliminates the need for brittle sleep-based timing and provides reliable command execution. It's particularly effective for debugging complex concurrency issues, nil pointer dereferences, and goroutine deadlocks in Go applications.
-
-#### Debug Chronicler
-
-The **Debug Chronicler** (`agents/debug-chronicler.md`) transforms ad-hoc debugging sessions into structured, reusable runbooks. After resolving a bug, this agent analyzes the entire conversation transcript to extract the debugging journey and create comprehensive documentation that helps future developers facing similar issues. It generates structured runbooks with symptom checklists, diagnostic flowcharts using Mermaid diagrams, step-by-step resolution paths, and verification procedures. Each runbook follows a consistent template that makes it easy to quickly identify if you're facing the same issue and provides proven resolution strategies.
-
-### Custom Commands
-
-Commands extend Claude Code with reusable workflows that can be invoked with simple phrases. Each command is a carefully crafted prompt template that guides Claude through specific tasks.
-
-#### Incremental Commit
-
-The **Incremental Commit** command (`commands/incremental-commit.md`) transforms the often chaotic process of creating git commits into a structured workflow. Rather than dumping all changes into a single commit, it analyzes your modifications and creates atomic, well-documented commits that tell a coherent story. The command intelligently groups related changes, writes detailed commit messages in natural prose, and ensures each commit represents a logical unit of work.
-
-#### Pre-PR Review
-
-The **Pre-PR Review** command (`commands/pre-pr-review.md`) acts as your personal code reviewer before you open a pull request. It checks for common issues, ensures tests pass, verifies documentation is updated, and provides a checklist of items to address. This preemptive review catches issues early, reducing review cycles and improving code quality.
-
-#### Code Deep Dive
-
-The **Code Deep Dive** command provides comprehensive exploration of complex codebases. It performs exhaustive analysis to understand architectural patterns, dependencies, and system behaviors, producing detailed reports with diagrams and documentation.
-
-#### Quick Dive
-
-The **Quick Dive** command (`commands/quick-dive.md`) is the fast-track alternative for targeted analysis. Using the Code Scout agent, it delivers focused insights in 2-3 minutes. This command is particularly useful when you need immediate answers about specific code functionality without the overhead of a full architectural analysis.
-
-#### Test Forge
-
-The **Test Forge** command (`commands/test-forge.md`) leverages the Test Engineer agent to create sophisticated test suites. It combines property-based testing, advanced fuzzing, and coverage-guided generation to produce comprehensive test coverage that goes beyond simple unit tests.
-
-#### Batch Review
-
-The **Batch Review** command enables analyzing multiple files simultaneously, perfect for reviewing related changes across a codebase or ensuring consistency in implementation patterns across multiple components.
-
-#### Security Audit
-
-The **Security Audit** command provides focused security analysis of code sections, identifying vulnerabilities, checking authentication flows, and suggesting security improvements.
-
-#### Fuzz Test
-
-The **Fuzz Test** command generates test cases that explore edge conditions and unexpected inputs, helping identify bugs that standard testing might miss.
-
-#### Doc Check
-
-The **Doc Check** command (`commands/doc-check.md`) verifies documentation accuracy against the actual codebase. It can verify an entire documentation folder or specific markdown files, ensuring all technical documentation accurately reflects the implementation.
-
-#### Chronicle Fix
-
-The **Chronicle Fix** command (`commands/chronicle-fix.md`) invokes the Debug Chronicler agent to analyze the current conversation and create a structured debugging runbook. This transforms one-off bug fixes into institutional knowledge that benefits the entire team, ensuring that debugging insights are preserved and reusable.
-
-#### Ideate
-
-The **Ideate** command (`commands/ideate.md`) transforms rough ideas into detailed implementation plans through structured interviewing. It accepts input in three forms: a file reference (`@rough-idea.md`), a GitHub issue (`#123` or full URL), or direct text input. Upon invocation, the command enters plan mode and conducts an in-depth interview using batches of 3-4 dynamic questions, probing for technical details, edge cases, constraints, dependencies, and architectural considerations. Questions are context-aware, referencing existing codebase patterns when relevant. The interview continues until the AI reaches a confidence threshold (~80%), then launches parallel enrichment agents (code analysis, security auditor, architecture review) to inform the final plan. The output is a structured plan file in `~/.claude/plans/` containing decisions made, implementation phases, risk assessment, and testing strategy. The command integrates with the session system for state persistence across context compactions.
-
-**Example usage:**
-```bash
-# From a file sketch
-/ideate @rough-idea.md
-
-# From a GitHub issue
-/ideate #456
-/ideate lightningnetwork/lnd#8456
-
-# From direct text
-/ideate "Add a new RPC endpoint for querying historical channel states"
+```
+/session-init  ->  (active work)  ->  /session-close --complete
+                       |
+                 (compaction)
+                       |
+               /session-resume
 ```
 
-### Hooks System
+Key features:
+- Per-project session tracking in `.sessions/` directories
+- Automatic state preservation via PreCompact hook
+- Structured logging: progress, decisions, discoveries, blockers
+- Full documentation in [SESSIONS.md](SESSIONS.md)
 
-The hooks system provides programmatic control over Claude Code's behavior through shell commands that execute at specific lifecycle events. This creates a feedback loop between Claude and your development environment.
+## Subtrate Agent Messaging
 
-#### Ultrathink Hook
+[Subtrate](https://github.com/roasbeef/subtrate) is a command center for orchestrating multiple Claude Code agents. It solves two fundamental problems with Claude Code agents: **isolation** (agents have no way to communicate with each other) and **ephemerality** (agents lose identity and context when compaction occurs).
 
-The **Ultrathink Hook** (`hooks/ultrathink_hook.py`) implements an innovative prompt modification system. When you append `-u` to your message, it triggers enhanced reasoning mode by adding the "ultrathink" instruction to your prompt. This causes Claude to engage in deeper analysis before responding, particularly useful for complex architectural decisions or debugging challenging issues.
+### Core Components
 
-#### Notification System
+- **Substrated Daemon**: gRPC server (port 10009) + REST gateway + WebSocket hub + embedded Web UI
+- **Substrate CLI**: Command-line client for mail operations, identity management, and polling
+- **Hook Scripts**: Shell scripts in `~/.claude/hooks/substrate/` that integrate with Claude Code's lifecycle
 
-The **Notification System** uses macOS native features to provide audio and visual feedback. The enhanced notification script (`notify-enhanced.sh`) plays different sounds for different events and displays alerts with contextual information including the current directory and git branch. This keeps you informed of Claude's progress without constantly monitoring the terminal. The system triggers notifications when Claude sends messages, completes responses, or when sub-agents finish their tasks.
+### Key Features
+
+- **Agent Identity**: Persistent, memorable codenames (e.g., "NobleLion", "SilverWolf") auto-generated on first use. Format: `CodeName@project.branch`. Survives across context compactions via PreCompact/SessionStart hook pair.
+- **Mail System**: Async messaging between agents with thread-based conversations, priorities (urgent/normal/low), and per-recipient state tracking (inbox/archived/trash). Full-text search on message content.
+- **Persistent Agent Pattern**: The Stop hook always outputs `{"decision": "block"}`, keeping the agent alive indefinitely. It long-polls for 9m30s checking for new messages, then loops. This means agents stay running and responsive to mail from other agents. Press Ctrl+C to force exit.
+- **Web UI**: Real-time dashboard at http://localhost:8080 with agent status, activity feed, unread counts, and inbox management. WebSocket-powered live updates.
+- **Heartbeat Tracking**: Agent liveness monitoring with status levels: active (<5min), idle (5-30min), offline (>30min). Heartbeats sent automatically by hooks on session start, prompt submit, and during stop polling.
+
+### How Agents Communicate
+
+```
+Agent A starts -> SessionStart hook sends heartbeat, checks inbox
+Agent A works  -> UserPromptSubmit hook sends heartbeat on each prompt
+Agent A idles  -> Stop hook long-polls, discovers message from Agent B
+                  -> Agent A reads mail, processes request, replies
+Agent B sends  -> substrate send --to AgentA --subject "..." --body "..."
+                  -> Message stored in SQLite, NotificationHub notifies
+```
+
+Subtrate is the **primary channel for reaching the user** and coordinating work across agents. When you need to send a status update or communicate asynchronously, use `substrate send` rather than just printing to the console.
+
+## Directory Structure
+
+```
+~/.claude/
+├── CLAUDE.md              # Global instructions for all projects
+├── README.md              # This file
+├── SESSIONS.md            # Session system documentation
+├── settings.json          # Hooks, permissions, sandbox config
+├── agents/                # Sub-agent definitions (10 agents)
+├── commands/              # Custom command definitions
+├── skills/                # Skill definitions (9 skills)
+│   ├── lnd/
+│   ├── eclair/
+│   ├── substrate/
+│   ├── nano-banana/
+│   ├── mutation-testing/
+│   ├── frontend-design/
+│   ├── slide-creator/
+│   ├── skill-creator/
+│   └── lnget/
+├── hooks/                 # Hook scripts
+│   ├── substrate/         # Agent messaging hooks
+│   ├── sessionstart/      # Session start hooks
+│   ├── precompact/        # Pre-compaction hooks
+│   └── userpromptsubmit/  # Prompt enhancement hooks
+├── projects/              # Per-project configurations
+├── plans/                 # Plan files from planning sessions
+└── plugins/               # Plugin cache (LSPs, etc.)
+```
 
 ## Getting Started
 
-To adopt this configuration for your own use, begin by understanding that Claude Code looks for customizations in the `.claude` directory. You can maintain both user-level configurations in `~/.claude/` and project-specific configurations in your project's `.claude/` directory.
+1. Clone to your home directory:
+   ```bash
+   cd ~ && git clone <repository-url> .claude
+   ```
 
-First, ensure you have Claude Code installed and configured. If you haven't already, follow the [official quickstart guide](https://docs.anthropic.com/en/docs/claude-code/quickstart) to get Claude Code running on your system.
+2. Make hook scripts executable:
+   ```bash
+   chmod +x ~/.claude/hooks/**/*.sh ~/.claude/hooks/**/*.py
+   ```
 
-Clone this repository to your home directory to establish user-level configurations that will apply to all your Claude Code sessions:
+3. Install Subtrate hooks:
+   ```bash
+   substrate hooks install
+   ```
 
-```bash
-cd ~
-git clone [repository-url] .claude
-```
+4. Review `settings.json` for hook paths, permissions, and sandbox configuration.
 
-The configuration uses shell scripts for hooks, which need to be executable:
-
-```bash
-chmod +x ~/.claude/notify-enhanced.sh
-chmod +x ~/.claude/hooks/ultrathink_hook.py
-```
-
-Review and customize the `settings.json` file to match your preferences. Pay particular attention to the paths in the hooks configuration, as these need to point to the correct locations on your system. If you're not on macOS, you'll need to modify the notification scripts to use your platform's notification system.
-
-## Usage Patterns
-
-Once configured, these extensions integrate seamlessly into your Claude Code workflow. To use a sub-agent, you can either explicitly request it or let Claude automatically delegate based on the task. For instance, saying "Use the architecture archaeologist to analyze the payment processing system" will invoke the specialized agent for deep analysis.
-
-Commands are triggered by mentioning them in your request. Saying "Help me create incremental commits for these changes" will activate the incremental commit workflow. Claude will analyze your changes, group them logically, and create atomic commits with detailed messages.
-
-### Choosing Between Quick Dive and Deep Dive
-
-The configuration offers two complementary approaches for code analysis:
-
-**Use Quick Dive (`/quick-dive`) when:**
-- You need an answer in 2-3 minutes
-- Your question is specific and focused ("How does X work?")
-- You're debugging and need to understand a particular flow
-- You want to quickly navigate to relevant code
-- Time is more important than exhaustiveness
-
-**Use Code Deep Dive (`/code-deep-dive`) when:**
-- You need comprehensive documentation
-- You're analyzing complex multi-system interactions
-- You're onboarding team members to a codebase
-- You want detailed architectural diagrams
-- Thoroughness is more important than speed
-
-For example, `/quick-dive How does user authentication work?` will give you a focused answer in minutes, while `/code-deep-dive Analyze the entire authentication and authorization architecture` will provide comprehensive documentation with multiple diagrams and reports.
-
-### Advanced Test Generation with Test Forge
-
-The Test Forge command revolutionizes test creation by combining multiple advanced testing techniques:
-
-**Use Test Forge (`/test-forge`) to:**
-- Generate comprehensive test suites with coverage guidance
-- Create property-based tests that verify invariants
-- Design advanced fuzz tests for state machines and business logic
-- Build reusable test harnesses for maintainability
-- Enhance existing tests or create new ones from scratch
-
-**Example workflows:**
-```bash
-# Generate tests for a new feature
-/test-forge PaymentProcessor
-
-# Enhance existing tests with property-based testing
-/test-forge BinaryTree.Insert "add property tests"
-
-# Focus on specific testing aspects
-/test-forge ConnectionPool "focus on concurrent operations and race conditions"
-```
-
-The Test Engineer agent will analyze existing tests (if any), identify coverage gaps, and generate sophisticated tests using the rapid property-based testing framework. It performs multiple refinement passes to optimize test quality and ensure comprehensive coverage.
-
-The ultrathink hook activates when you end your message with `-u`. This is particularly useful for complex problems where you want Claude to engage in deeper reasoning. For example, "Explain how this distributed lock mechanism prevents race conditions -u" will trigger enhanced analysis mode.
-
-## Customization
-
-This configuration serves as a foundation that you can extend based on your specific needs. Creating new sub-agents involves adding Markdown files to the `agents/` directory with appropriate YAML frontmatter defining the agent's capabilities and system prompt. The key is to make each agent focused on a specific domain while providing clear instructions about its responsibilities.
-
-New commands follow a similar pattern in the `commands/` directory. Commands can specify which tools they're allowed to use, provide argument hints, and include detailed instructions for completing specific workflows. Think of commands as reusable prompt templates that encode best practices for common tasks.
-
-Hooks can be any executable program that reads from stdin and writes to stdout. They receive contextual information as JSON and can modify or block Claude's actions. This provides a powerful extension point for integrating with your existing toolchain or enforcing project-specific policies.
-
-## Advanced Workflows
-
-The true power of this configuration emerges when components work together. Consider a typical feature development workflow: you might start by using the architecture archaeologist to understand the existing system, implement your changes with Claude's assistance, use the security auditor to check for vulnerabilities, run the pre-PR review command to ensure quality, and finally use the incremental commit command to create a clean git history.
-
-For documentation workflows, the Architecture Archaeologist now automatically invokes the Documentation Double-Checker after generating documentation, ensuring accuracy. You can also use the `/doc-check` command independently to verify existing documentation:
-
-```bash
-# Verify all documentation in a folder
-/doc-check ./docs
-
-# Verify specific files
-/doc-check README.md ARCHITECTURE.md API.md
-```
-
-This creates a virtuous cycle where documentation generation and verification work together to maintain high-quality, accurate technical documentation.
-
-For code reviews, you might invoke the code reviewer agent on a pull request, have it identify issues, then use Claude's main context to implement fixes, with the notification system keeping you informed of progress throughout. The ultrathink mode can be engaged when the reviewer encounters particularly complex logic that requires deeper analysis.
-
-For debugging workflows, the Go Debugger agent provides a powerful interactive debugging experience. When encountering a bug in Go code, you can invoke the agent to create a tmux debugging session where you can set breakpoints, step through code, and inspect program state in real-time. After successfully resolving the issue, use the `/chronicle-fix` command to have the Debug Chronicler analyze the debugging session and create a structured runbook. This transforms your debugging experience into reusable knowledge that helps the entire team resolve similar issues faster in the future. The combination of interactive debugging and automatic documentation creation ensures that no debugging insight is lost.
-
-## Performance Considerations
-
-Sub-agents operate in separate context windows, which means they don't consume the main conversation's token budget. This allows for extensive analysis without losing your conversation history. However, each sub-agent invocation does count against your usage limits, so it's important to use them judiciously.
-
-The parallel execution capability of sub-agents can significantly reduce wall-clock time for complex analyses. When the architecture archaeologist launches multiple investigation threads, they run concurrently rather than sequentially, providing comprehensive results more quickly.
-
-Hooks execute synchronously and can impact response times if they perform expensive operations. Keep hook scripts lightweight and focused. The notification system, for example, plays sounds asynchronously to avoid blocking Claude's response.
-
-## Integration with Development Workflows
-
-This configuration is designed to integrate smoothly with existing development practices. The git-aware commands understand your repository structure and follow your project's commit conventions. The notification system respects your focus by providing unobtrusive alerts rather than interrupting your flow.
-
-For teams, consider maintaining a shared `.claude/` directory in your project repository. This ensures all team members have access to the same specialized agents and commands, creating consistency in how Claude Code is used across your organization. You can even create project-specific agents that understand your unique architecture and coding standards.
-
-## Security Considerations
-
-Hooks run with your environment's credentials, so review any hook scripts carefully before installation. The configuration intentionally uses simple, auditable scripts rather than complex programs. Never install hooks from untrusted sources, as they have full access to your system within the permissions of your user account.
-
-Sub-agents and commands operate within Claude Code's security model, with access only to the tools specified in their configuration. This provides defense in depth, ensuring that specialized agents can't perform actions outside their intended scope.
-
-## Further Resources
-
-To deepen your understanding of Claude Code's capabilities, explore the [official documentation](https://docs.anthropic.com/en/docs/claude-code/overview). The [sub-agents guide](https://docs.anthropic.com/en/docs/claude-code/sub-agents) provides detailed information about creating and managing specialized agents. The [hooks guide](https://docs.anthropic.com/en/docs/claude-code/hooks-guide) explains the complete hooks API and lifecycle events.
-
-For inspiration on extending this configuration, consider your most common development tasks and pain points. Claude Code's extensibility means you can encode your team's best practices, automate repetitive workflows, and create a development environment that actively assists rather than passively responds.
-
-## Conclusion
-
-This configuration demonstrates how Claude Code can be transformed from a capable AI assistant into a comprehensive development platform. Through the thoughtful application of sub-agents, commands, and hooks, you can create an environment where AI augmentation becomes a natural part of your development workflow rather than an external tool.
-
-The modular nature of these extensions means you can adopt them incrementally, starting with the components most relevant to your work and expanding as you discover new use cases. Whether you're exploring unfamiliar codebases, maintaining complex systems, or striving for higher code quality, this configuration provides the foundation for AI-enhanced development that adapts to your needs rather than forcing you to adapt to it.
+See the [Claude Code documentation](https://docs.anthropic.com/en/docs/claude-code/overview) for general setup and the [hooks guide](https://docs.anthropic.com/en/docs/claude-code/hooks-guide) for hook configuration.
