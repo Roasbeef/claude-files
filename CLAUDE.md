@@ -54,9 +54,9 @@ the Security framework's certificate chain verification via Mach IPC.
 
 # Code Review Workflow
 
-After committing changes, request a code review via Subtrate's native review
-system. This spawns Claude reviewer agents that analyze diffs and return
-structured feedback with issues.
+After completing a task or feature, request a code review via Subtrate's native
+review system before creating a PR. This spawns Claude reviewer agents that
+analyze diffs and return structured feedback with issues.
 
 ## Post-Commit Review
 ```bash
@@ -97,7 +97,7 @@ substrate review request --session-id "$CLAUDE_SESSION_ID" --type architecture
 - **architecture** — Separation of concerns, interface design, testability
 
 ## When to Request Reviews
-- Before creating a PR
+- After completing a task or feature (before opening a PR)
 - After significant refactoring
 - When touching security-sensitive code (`--type security`)
 - When adding new public interfaces (`--type architecture`)
