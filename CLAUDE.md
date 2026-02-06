@@ -52,6 +52,56 @@ When `gh`, `git`, `go`, or other CLI commands fail with TLS/x509/certificate err
 command with `dangerouslyDisableSandbox: true`. The macOS sandbox blocks access to
 the Security framework's certificate chain verification via Mach IPC.
 
+# Code Review Workflow
+
+After committing changes, request a code review via Subtrate's native review
+system. This spawns Claude reviewer agents that analyze diffs and return
+structured feedback with issues.
+
+## Post-Commit Review
+```bash
+# Review current branch against main (auto-detects branch/commit/remote)
+substrate review request --session-id "$CLAUDE_SESSION_ID"
+
+# Review a specific branch against a base
+substrate review request --session-id "$CLAUDE_SESSION_ID" --branch feature-x --base main
+
+# Review a specific commit
+substrate review request --session-id "$CLAUDE_SESSION_ID" --commit abc123
+
+# Review a specific PR
+substrate review request --session-id "$CLAUDE_SESSION_ID" --pr 42
+
+# Security-focused review
+substrate review request --session-id "$CLAUDE_SESSION_ID" --type security
+
+# Performance review
+substrate review request --session-id "$CLAUDE_SESSION_ID" --type performance
+
+# Architecture review
+substrate review request --session-id "$CLAUDE_SESSION_ID" --type architecture
+```
+
+## Review Back-and-Forth
+1. Commit changes on feature branch
+2. Run `substrate review request --session-id "$CLAUDE_SESSION_ID"`
+3. Check status: `substrate review status <id> --session-id "$CLAUDE_SESSION_ID"`
+4. View issues: `substrate review issues <id> --session-id "$CLAUDE_SESSION_ID"`
+5. Address issues, commit fixes
+6. Review system tracks iterations automatically
+
+## Review Types
+- **full** (default) — General review (bugs, logic, security, CLAUDE.md compliance)
+- **security** — Injection, auth bypass, data exposure, crypto
+- **performance** — N+1 queries, memory leaks, allocations
+- **architecture** — Separation of concerns, interface design, testability
+
+## When to Request Reviews
+- Before creating a PR
+- After significant refactoring
+- When touching security-sensitive code (`--type security`)
+- When adding new public interfaces (`--type architecture`)
+
 # Hunk for Precision Staging
 
 Hunk enables line-level git staging, designed for AI agents who know exactly which lines they changed.
@@ -285,6 +335,11 @@ The skill handles session ID and formatting automatically.
 | `poll` | Wait for new messages | `substrate poll --session-id "$CLAUDE_SESSION_ID" --wait=30s` |
 | `heartbeat` | Send liveness signal | `substrate heartbeat --session-id "$CLAUDE_SESSION_ID"` |
 | `identity current` | Show your agent name | `substrate identity current --session-id "$CLAUDE_SESSION_ID"` |
+| `review request` | Request code review | `substrate review request --session-id "$CLAUDE_SESSION_ID"` |
+| `review status <id>` | Show review status | `substrate review status abc --session-id "$CLAUDE_SESSION_ID"` |
+| `review list` | List reviews | `substrate review list --session-id "$CLAUDE_SESSION_ID"` |
+| `review issues <id>` | List review issues | `substrate review issues abc --session-id "$CLAUDE_SESSION_ID"` |
+| `review cancel <id>` | Cancel review | `substrate review cancel abc --session-id "$CLAUDE_SESSION_ID"` |
 
 **There is NO `reply` command** - to reply, use `send` with the sender as recipient:
 ```bash
