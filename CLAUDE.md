@@ -432,3 +432,26 @@ correctly but I'm not sure how to configure the notification hub...
 - Current git branch
 - What task or goal you're working on
 - Any relevant blockers or decisions needed
+
+## Sending Diffs to the User
+
+After making commits, **send a diff to the User** so they can see actual code
+changes with syntax highlighting in the web UI:
+
+```bash
+substrate send-diff --session-id "$CLAUDE_SESSION_ID" --to User --base main
+```
+
+**When to send diffs:**
+- After making commits on a feature branch (before or after opening a PR)
+- After addressing review feedback with fixup commits
+- When you want the user to see what changed without them having to check git
+
+The command auto-detects the current branch, computes a diff against the base
+branch (main/master), and sends a message with the diff rendered in the web UI.
+
+**Flags:**
+- `--to` — Recipient (default: User)
+- `--base` — Base branch to diff against (auto-detects main/master)
+- `--repo` — Repository path (default: current directory)
+- `--subject` — Custom subject (default: auto-generated from branch + stats)
