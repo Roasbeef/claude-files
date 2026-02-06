@@ -152,10 +152,16 @@
     ]
   },
   "sandbox": {
-    "enabled": true,
-    "autoAllowBashIfSandboxed": true,
-    "excludedCommands": ["docker", "git", "gh", "npx playwright", "bun run test:e2e"],
     "allowUnsandboxedCommands": true,
+    "autoAllowBashIfSandboxed": true,
+    "enabled": true,
+    "excludedCommands": [
+      "docker",
+      "git",
+      "gh",
+      "npx playwright",
+      "bun run test:e2e"
+    ],
     "filesystem": {
       "write": {
         "allowOnly": [
@@ -177,6 +183,11 @@
       }
     },
     "network": {
+      "allowLocalBinding": true,
+      "allowUnixSockets": [
+        "/var/run/docker.sock",
+        "/Users/roasbeef/.gnupg/S.gpg-agent.ssh"
+      ],
       "allowedDomains": [
         "github.com",
         "api.github.com",
@@ -188,12 +199,7 @@
         "registry.npmjs.org",
         "*.pypi.org",
         "pypi.org"
-      ],
-      "allowUnixSockets": [
-        "/var/run/docker.sock",
-        "/Users/roasbeef/.gnupg/S.gpg-agent.ssh"
-      ],
-      "allowLocalBinding": true
+      ]
     }
   },
   "statusLine": {
