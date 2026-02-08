@@ -316,9 +316,12 @@ $summary
 # Step 4: Long poll to keep agent alive
 # ============================================================================
 
-# No mail, no tasks - do a longer poll to keep agent alive
+# No mail, no tasks - do a longer poll to keep agent alive.
 # --always-block ensures we output block decision even with no messages.
 # This keeps the agent alive indefinitely, continuously checking for work.
+#
+# When the server is unreachable (poll fails immediately), we fall back to
+# a local sleep-based retry loop to avoid churning the hook in a tight loop.
 
 # Debug log for poll.
 debug_log="$HOME/.subtrate/stop_hook_trace.log"
@@ -326,7 +329,11 @@ mkdir -p "$(dirname "$debug_log")"
 echo "=== Stop Hook Step 4: $(date) ===" >> "$debug_log"
 echo "session_args: [$session_args]" >> "$debug_log"
 
-poll_output=$(substrate poll $session_args --wait=570s --format hook --always-block 2>&1)
+# Record start time so we can fill the full 9m30s window on failure.
+start_time=$(date +%s)
+max_duration=570  # 9m30s
+
+poll_output=$(substrate poll $session_args --wait=${max_duration}s --format hook --always-block 2>&1)
 poll_exit=$?
 echo "poll_exit: $poll_exit, output: $poll_output" >> "$debug_log"
 
@@ -339,5 +346,37 @@ if [ $poll_exit -eq 0 ]; then
     echo "$poll_output" | jq -c --arg uuid "$poll_uuid" \
         '.reason = "No new messages. Say: Standing by [" + $uuid + "]"'
 else
-    echo '{"decision": "block", "reason": "Error - say: Standing by ['"$poll_uuid"']"}'
+    # Poll failed (server likely down). Sleep-retry to fill the remaining
+    # time window instead of returning immediately, which would cause the
+    # hook to churn in a tight loop.
+    elapsed=$(( $(date +%s) - start_time ))
+    remaining=$(( max_duration - elapsed ))
+    echo "Poll failed, entering sleep-retry loop (${remaining}s remaining)" >> "$debug_log"
+
+    retry_interval=30
+    while [ "$remaining" -gt 0 ]; do
+        sleep_time=$retry_interval
+        if [ "$sleep_time" -gt "$remaining" ]; then
+            sleep_time=$remaining
+        fi
+        sleep "$sleep_time"
+        remaining=$(( max_duration - ($(date +%s) - start_time) ))
+
+        # Try polling again in case the server came back up.
+        retry_output=$(substrate poll $session_args --wait=5s --format hook --always-block 2>/dev/null)
+        if [ $? -eq 0 ]; then
+            has_mail=$(echo "$retry_output" | jq -r '.reason // ""' | grep -c "unread")
+            if [ "$has_mail" -gt 0 ]; then
+                echo "Server recovered, mail found" >> "$debug_log"
+                echo "$retry_output" | jq -c --arg uuid "$poll_uuid" \
+                    '.reason = .reason + " [" + $uuid + "]"'
+                exit 0
+            fi
+        fi
+
+        remaining=$(( max_duration - ($(date +%s) - start_time) ))
+        echo "Retry at $(date), ${remaining}s remaining" >> "$debug_log"
+    done
+
+    echo '{"decision": "block", "reason": "Server unreachable. Say: Standing by ['"$poll_uuid"']"}'
 fi
