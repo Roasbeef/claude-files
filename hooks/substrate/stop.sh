@@ -115,6 +115,47 @@ EOF
 fi
 
 # ============================================================================
+# Step 2.5: Send git diff summary (with deduplication)
+# ============================================================================
+
+# Send diff summary in background if there are changes since the base branch.
+{
+    diff_flag="$HOME/.subtrate/diff_sent_${session_id:-default}"
+    now_diff=$(date +%s)
+
+    # Only send once per session (or every 30 minutes).
+    send_diff=true
+    if [ -f "$diff_flag" ]; then
+        last_diff=$(cat "$diff_flag" 2>/dev/null || echo "0")
+        elapsed_diff=$((now_diff - last_diff))
+        if [ "$elapsed_diff" -lt 1800 ]; then
+            send_diff=false
+        fi
+    fi
+
+    if [ "$send_diff" = "true" ]; then
+        project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+
+        # Only send if there are actual changes.
+        if git -C "$project_dir" diff --quiet HEAD 2>/dev/null; then
+            # No uncommitted changes - check committed changes vs base.
+            base_branch="main"
+            current_branch=$(git -C "$project_dir" branch --show-current 2>/dev/null)
+            if [ -n "$current_branch" ] && [ "$current_branch" != "$base_branch" ]; then
+                if ! git -C "$project_dir" diff --quiet "$base_branch...$current_branch" 2>/dev/null; then
+                    substrate send-diff $session_args --repo "$project_dir" 2>/dev/null && \
+                        echo "$now_diff" > "$diff_flag"
+                fi
+            fi
+        else
+            # Has uncommitted changes.
+            substrate send-diff $session_args --repo "$project_dir" 2>/dev/null && \
+                echo "$now_diff" > "$diff_flag"
+        fi
+    fi
+} &
+
+# ============================================================================
 # Step 3: Send status update (with deduplication)
 # ============================================================================
 
