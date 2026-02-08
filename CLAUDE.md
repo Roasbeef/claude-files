@@ -371,6 +371,7 @@ No manual identity setup needed - your agent identity is auto-created on first u
 | **Stop** | Long-poll 9m30s, always block to keep agent alive (Ctrl+C to force exit) |
 | **SubagentStop** | Block once if messages exist, then allow exit |
 | **PreCompact** | Save identity for restoration after compaction |
+| **Notification** | Send mail to User on permission prompts and notifications |
 
 The Stop hook keeps your agent alive indefinitely, checking for work from other agents. Press **Ctrl+C** to force exit.
 

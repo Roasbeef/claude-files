@@ -10,6 +10,18 @@
     "lastShownTime": 1753983872081
   },
   "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/substrate/notification.sh",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
     "PostToolUse": [
       {
         "hooks": [],
