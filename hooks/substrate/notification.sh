@@ -56,7 +56,7 @@ Type: $notif_type"
         --to User \
         --subject "$subject" \
         --body "$body" \
-        2>/dev/null || true
+        >/dev/null 2>/dev/null || true
 } &
 
 exit 0

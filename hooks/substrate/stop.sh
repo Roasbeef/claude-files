@@ -143,13 +143,13 @@ fi
             current_branch=$(git -C "$project_dir" branch --show-current 2>/dev/null)
             if [ -n "$current_branch" ] && [ "$current_branch" != "$base_branch" ]; then
                 if ! git -C "$project_dir" diff --quiet "$base_branch...$current_branch" 2>/dev/null; then
-                    substrate send-diff $session_args --repo "$project_dir" 2>/dev/null && \
+                    substrate send-diff $session_args --repo "$project_dir" >/dev/null 2>/dev/null && \
                         echo "$now_diff" > "$diff_flag"
                 fi
             fi
         else
             # Has uncommitted changes.
-            substrate send-diff $session_args --repo "$project_dir" 2>/dev/null && \
+            substrate send-diff $session_args --repo "$project_dir" >/dev/null 2>/dev/null && \
                 echo "$now_diff" > "$diff_flag"
         fi
     fi
