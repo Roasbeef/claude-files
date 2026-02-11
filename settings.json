@@ -26,6 +26,15 @@
       {
         "hooks": [],
         "matcher": ""
+      },
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/substrate/task_sync.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": "TaskCreate|TaskUpdate|TaskList|TaskGet"
       }
     ],
     "PreCompact": [
