@@ -60,7 +60,7 @@ Type: $notif_type"
         --subject "$subject" \
         --body "$body" \
         >/dev/null 2>/dev/null || true
-} &
+} </dev/null >/dev/null 2>&1 &
 
 # For idle_prompt, output JSON with additionalContext to wake the agent.
 # Without this, the hook silently consumes the idle event and the agent

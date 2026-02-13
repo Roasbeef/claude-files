@@ -65,7 +65,7 @@ $summary
         --subject "[Status] $agent_name - Compacting" \
         --body "$status_body" \
         2>/dev/null || true
-} &
+} </dev/null >/dev/null 2>&1 &
 
 # Output status summary for context after compaction.
 substrate status $session_args --format context 2>/dev/null || true

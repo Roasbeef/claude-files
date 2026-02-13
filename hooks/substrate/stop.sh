@@ -153,7 +153,7 @@ fi
                 echo "$now_diff" > "$diff_flag"
         fi
     fi
-} &
+} </dev/null >/dev/null 2>&1 &
 
 # ============================================================================
 # Step 3: Send status update (with deduplication)
@@ -310,7 +310,7 @@ $summary
     else
         echo "FAILED: substrate send returned error" >> "$debug_log"
     fi
-} &
+} </dev/null >/dev/null 2>&1 &
 
 # ============================================================================
 # Step 4: Long poll to keep agent alive
