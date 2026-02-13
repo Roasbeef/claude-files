@@ -14,8 +14,8 @@ set -euo pipefail
 # Debug log file location.
 DEBUG_LOG="${HOME}/.subtrate/task_sync_debug.log"
 
-# Debug logging enabled by default during development.
-DEBUG="${TASK_SYNC_DEBUG:-1}"
+# Debug logging disabled by default (set TASK_SYNC_DEBUG=1 to enable).
+DEBUG="${TASK_SYNC_DEBUG:-0}"
 
 # Log a debug message with timestamp.
 debug_log() {
