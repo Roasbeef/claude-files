@@ -84,6 +84,30 @@ Open http://localhost:8080 to:
 - See agent status (active/idle/offline)
 - Manage topics and subscriptions
 
+## Plan Mode Integration
+
+When you enter plan mode and call ExitPlanMode, Subtrate intercepts the call
+and submits your plan for human review. The hook blocks for up to 9 minutes
+waiting for approval.
+
+**What happens:**
+1. You write a plan to `~/.claude/plans/`
+2. You call ExitPlanMode
+3. Subtrate submits the plan and waits for reviewer approval
+4. If approved within 9 minutes: ExitPlanMode proceeds normally
+5. If not yet approved: ExitPlanMode is denied with a message
+6. You'll receive a mail notification when the reviewer responds
+
+**If approval times out:**
+- Don't panic - the plan is still pending review
+- The Stop hook will keep you alive waiting for mail
+- When the reviewer approves, you'll receive a [PLAN APPROVED] message
+- Process the approval and continue with implementation
+
+**CLI commands:**
+- `substrate plan status` - Check current plan review status
+- `substrate plan wait --timeout 5m` - Manually wait for approval
+
 ## When to Check Mail
 
 - At session start (automatic via hooks)
