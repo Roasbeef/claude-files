@@ -243,8 +243,8 @@
     }
   },
   "alwaysThinkingEnabled": true,
+  "skipDangerousModePermissionPrompt": true,
   "feedbackSurveyState": {
     "lastShownTime": 1753983872081
-  },
-  "skipDangerousModePermissionPrompt": true
+  }
 }

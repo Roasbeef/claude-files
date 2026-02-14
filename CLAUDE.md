@@ -88,7 +88,10 @@ substrate review request --session-id "$CLAUDE_SESSION_ID" --type architecture
 3. Check status: `substrate review status <id> --session-id "$CLAUDE_SESSION_ID"`
 4. View issues: `substrate review issues <id> --session-id "$CLAUDE_SESSION_ID"`
 5. Address issues, commit fixes
-6. Review system tracks iterations automatically
+6. Run `substrate review resubmit <id> --session-id "$CLAUDE_SESSION_ID"` to trigger re-review
+   - If the original reviewer is still alive (stop hook polling), feedback is delivered as mail
+   - If the reviewer has exited, a fresh reviewer is spawned automatically
+7. Review system tracks iterations automatically
 
 ## Review Types
 - **full** (default) — General review (bugs, logic, security, CLAUDE.md compliance)
@@ -368,6 +371,7 @@ The skill handles session ID and formatting automatically.
 | `review status <id>` | Show review status | `substrate review status abc --session-id "$CLAUDE_SESSION_ID"` |
 | `review list` | List reviews | `substrate review list --session-id "$CLAUDE_SESSION_ID"` |
 | `review issues <id>` | List review issues | `substrate review issues abc --session-id "$CLAUDE_SESSION_ID"` |
+| `review resubmit <id>` | Resubmit after fixes | `substrate review resubmit abc --session-id "$CLAUDE_SESSION_ID"` |
 | `review cancel <id>` | Cancel review | `substrate review cancel abc --session-id "$CLAUDE_SESSION_ID"` |
 
 **There is NO `reply` command** - to reply, use `send` with the sender as recipient:
