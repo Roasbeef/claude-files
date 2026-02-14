@@ -130,6 +130,18 @@ hunk reset                      # Unstage if needed
 
 Line numbers refer to **new file** lines (what editors display), not old file lines.
 
+**Atomic change groups:**
+When a replacement (deletions + additions with no context between them) is
+partially selected, hunk automatically includes the entire group. You cannot
+stage half a replacement — the deletions and additions are atomic. Pure-addition
+and pure-deletion groups can still be individually line-selected.
+
+**Fallback when staging fails:**
+If `hunk stage` fails with "patch does not apply", fall back to:
+- `git add <file>` for whole-file staging
+- Broader line ranges that cover entire change groups
+- Stage file-by-file instead of cherry-picking lines across many hunks
+
 **Best practices:**
 - Run `hunk diff --json` to get exact line numbers before staging.
 - Use `hunk preview` to verify the patch looks correct before committing.
@@ -185,8 +197,25 @@ hunk rebase continue
 hunk rebase abort
 ```
 
+**Auto-squashing fixup commits:**
+```bash
+# Automatically squash all fixup! and squash! commits
+hunk rebase autosquash --onto main
+
+# Preview what would be squashed
+hunk rebase autosquash --onto main --dry-run
+
+# JSON output for programmatic use
+hunk rebase autosquash --onto main --json
+```
+
+This replaces the manual workflow of listing commits and constructing
+`pick:X,fixup:Y` action strings. Just create `fixup!` commits with
+`git commit --fixup=<sha>` and then run `hunk rebase autosquash`.
+
 **Best practices:**
 - Always use `hunk rebase list --onto <base> --json` first to get exact commit hashes.
+- Prefer `hunk rebase autosquash` over manual `run` when squashing fixups.
 - Use fixup (not squash) when you want to silently fold in typo fixes.
 - Run `hunk rebase status` after run to verify completion.
 
