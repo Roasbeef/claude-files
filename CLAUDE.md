@@ -180,19 +180,33 @@ hunk rebase abort                      # Abort and restore original state
 **Common patterns:**
 ```bash
 # Squash last 2 commits into one
-hunk rebase list --onto main --json  # Get commit hashes
-hunk rebase run --onto main "pick:first,squash:second"
+hunk rebase list --onto main --json           # Get commit hashes
+hunk rebase run --onto main "pick:abc123,squash:def456"
 
-# Drop a debug commit
-hunk rebase run --onto main "pick:a,drop:debug,pick:b"
+# Drop a debug/temporary commit from history
+hunk rebase run --onto main "pick:abc123,drop:debug1,pick:ghi789"
 
-# Run tests after each commit
-hunk rebase run --onto main "pick:a,exec:make test,pick:b,exec:make test"
+# Run tests after each commit to verify history is clean
+hunk rebase run --onto main "pick:abc123,exec:go test ./...,pick:def456,exec:go test ./..."
+
+# Reword a commit message
+hunk rebase run --onto main "pick:abc123,reword:def456:fix: correct nil check in handshake"
+
+# Squash multiple fixup commits into their targets
+hunk rebase run --onto main "pick:feat1,fixup:typo1,pick:feat2,fixup:typo2"
 ```
+
+**Auto-squash** (preferred for fixup commits):
+```bash
+hunk rebase autosquash --onto main              # Squash all fixup!/squash! commits
+hunk rebase autosquash --onto main --dry-run    # Preview what would be squashed
+```
+
+Create fixups with `git commit --fixup=<sha>`, then auto-squash.
 
 **Conflict handling:**
 ```bash
-hunk rebase status --json  # Check for conflicts
+hunk rebase status                  # Check for conflicts
 # Resolve conflicts manually, then:
 git add <resolved-files>
 hunk rebase continue
@@ -200,25 +214,9 @@ hunk rebase continue
 hunk rebase abort
 ```
 
-**Auto-squashing fixup commits:**
-```bash
-# Automatically squash all fixup! and squash! commits
-hunk rebase autosquash --onto main
-
-# Preview what would be squashed
-hunk rebase autosquash --onto main --dry-run
-
-# JSON output for programmatic use
-hunk rebase autosquash --onto main --json
-```
-
-This replaces the manual workflow of listing commits and constructing
-`pick:X,fixup:Y` action strings. Just create `fixup!` commits with
-`git commit --fixup=<sha>` and then run `hunk rebase autosquash`.
-
 **Best practices:**
-- Always use `hunk rebase list --onto <base> --json` first to get exact commit hashes.
-- Prefer `hunk rebase autosquash` over manual `run` when squashing fixups.
+- Always `hunk rebase list --onto <base> --json` first to get exact hashes.
+- Prefer `autosquash` over manual `run` when squashing fixups.
 - Use fixup (not squash) when you want to silently fold in typo fixes.
 - Run `hunk rebase status` after run to verify completion.
 
