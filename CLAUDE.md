@@ -258,7 +258,6 @@ When a session is active (`.sessions/active/` has files), you MUST log at these 
 **2. New information learned** → `--discovery`
 ```
 /session-log --discovery "channeldb uses big-endian for keys, not little-endian"
-/session-log --discovery "Must acquire mutex before channel state access"
 ```
 
 **3. Decision made** → `--decision`
