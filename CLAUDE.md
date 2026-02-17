@@ -250,44 +250,23 @@ When a session is active (`.sessions/active/` has files), you MUST log at these 
 
 ### Log Triggers (When to Log)
 
-**1. Key component finished** → `--progress`
-- Completed a function, method, or logical unit
-- Fixed a bug (include file:line)
-- Added/modified a test
+**1. Key component finished / Bug milestone** → `--progress`
 ```
 /session-log --progress "Implemented validateTx in chain.go:145-180"
-/session-log --progress "Fixed nil pointer bug in sweeper.go:245"
 ```
 
-**2. Bug/task milestone** → `--progress`
-- Root cause identified
-- Fix verified working
-- Tests passing
-```
-/session-log --progress "Root cause: missing lock in concurrent path"
-/session-log --progress "Fix verified: all 12 tests passing"
-```
-
-**3. New information learned** → `--discovery`
-- Found undocumented behavior
-- Discovered a constraint or requirement
-- Learned something that affects the approach
+**2. New information learned** → `--discovery`
 ```
 /session-log --discovery "channeldb uses big-endian for keys, not little-endian"
 /session-log --discovery "Must acquire mutex before channel state access"
 ```
 
-**4. Decision made** → `--decision`
-- Chose between multiple approaches
-- Made a tradeoff
+**3. Decision made** → `--decision`
 ```
 /session-log --decision "Using mutex over channel" --rationale="simpler, no concurrent readers"
 ```
 
-**5. Blocked** → `--blocker`
-- Need user input
-- Missing information
-- Unexpected failure
+**4. Blocked** → `--blocker`
 ```
 /session-log --blocker "Need to know: should this return error or panic?"
 ```
@@ -371,6 +350,11 @@ The skill handles session ID and formatting automatically.
 | `review issues <id>` | List review issues | `substrate review issues abc --session-id "$CLAUDE_SESSION_ID"` |
 | `review resubmit <id>` | Resubmit after fixes | `substrate review resubmit abc --session-id "$CLAUDE_SESSION_ID"` |
 | `review cancel <id>` | Cancel review | `substrate review cancel abc --session-id "$CLAUDE_SESSION_ID"` |
+| `agent discover` | Discover agents with filters | `substrate agent discover --session-id "$CLAUDE_SESSION_ID" --status active` |
+| `send-diff` | Send git diff as message | `substrate send-diff --session-id "$CLAUDE_SESSION_ID" --to User` |
+| `plan submit` | Submit plan for review | `substrate plan submit --session-id "$CLAUDE_SESSION_ID"` |
+| `plan approve <id>` | Approve a plan | `substrate plan approve abc --session-id "$CLAUDE_SESSION_ID"` |
+| `plan reject <id>` | Reject a plan | `substrate plan reject abc --session-id "$CLAUDE_SESSION_ID"` |
 
 **There is NO `reply` command** - to reply, use `send` with the sender as recipient:
 ```bash
