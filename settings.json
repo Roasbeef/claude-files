@@ -39,6 +39,7 @@
     ],
     "defaultMode": "bypassPermissions"
   },
+  "model": "opus",
   "hooks": {
     "Notification": [
       {
@@ -208,7 +209,19 @@
     "frontend-design@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true,
     "playground@claude-plugins-official": true,
-    "ralph-wiggum@claude-plugins-official": false
+    "ralph-wiggum@claude-plugins-official": false,
+    "gh-cli@trailofbits": true,
+    "git-cleanup@trailofbits": true,
+    "workflow-skill-design@trailofbits": true,
+    "variant-analysis@trailofbits": true,
+    "spec-to-code-compliance@trailofbits": true,
+    "sharp-edges@trailofbits": true,
+    "differential-review@trailofbits": true,
+    "second-opinion@trailofbits": true,
+    "property-based-testing@trailofbits": true,
+    "insecure-defaults@trailofbits": true,
+    "audit-context-building@trailofbits": true,
+    "ask-questions-if-underspecified@trailofbits": true
   },
   "sandbox": {
     "enabled": true,
@@ -246,6 +259,5 @@
   "skipDangerousModePermissionPrompt": true,
   "feedbackSurveyState": {
     "lastShownTime": 1753983872081
-  },
-  "model": "opus"
+  }
 }
