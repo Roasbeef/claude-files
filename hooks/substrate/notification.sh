@@ -54,13 +54,17 @@ body="$body
 Type: $notif_type"
 
 # Send mail in background so the hook returns immediately.
-{
-    substrate send $session_args \
-        --to User \
-        --subject "$subject" \
-        --body "$body" \
-        >/dev/null 2>/dev/null || true
-} </dev/null >/dev/null 2>&1 &
+# Skip idle_prompt — these are repetitive and not actionable for the user.
+# The additionalContext output below still wakes the agent.
+if [ "$notif_type" != "idle_prompt" ]; then
+    {
+        substrate send $session_args \
+            --to User \
+            --subject "$subject" \
+            --body "$body" \
+            >/dev/null 2>/dev/null || true
+    } </dev/null >/dev/null 2>&1 &
+fi
 
 # For idle_prompt, output JSON with additionalContext to wake the agent.
 # Without this, the hook silently consumes the idle event and the agent
