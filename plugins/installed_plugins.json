@@ -1,0 +1,186 @@
+{
+  "version": 2,
+  "plugins": {
+    "code-review@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/code-review/aa296ec81e8c",
+        "version": "aa296ec81e8c",
+        "installedAt": "2025-12-28T03:19:16.402Z",
+        "lastUpdated": "2026-02-20T20:35:57.692Z",
+        "gitCommitSha": "51437a45cafcb760b17c747fa1c4ae9872dce503"
+      }
+    ],
+    "typescript-lsp@claude-plugins-official": [
+      {
+        "scope": "project",
+        "projectPath": "/Users/roasbeef/codez/obsidian-claude-codes",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/typescript-lsp/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2025-12-30T02:29:07.770Z",
+        "lastUpdated": "2025-12-30T02:29:07.770Z",
+        "gitCommitSha": "45b20c20edcb76fc16995c48e1ce26ddae198837"
+      }
+    ],
+    "gopls-lsp@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/gopls-lsp/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-01-01T02:46:02.767Z",
+        "lastUpdated": "2026-01-01T02:46:02.767Z",
+        "gitCommitSha": "f9c88b15778f6d090cc707827199bbc3c5652e1d"
+      }
+    ],
+    "ralph-wiggum@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/ralph-wiggum/unknown",
+        "version": "unknown",
+        "installedAt": "2026-01-01T10:20:39.222Z",
+        "lastUpdated": "2026-01-01T10:20:39.222Z",
+        "gitCommitSha": "f9c88b15778f6d090cc707827199bbc3c5652e1d"
+      }
+    ],
+    "frontend-design@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/frontend-design/aa296ec81e8c",
+        "version": "aa296ec81e8c",
+        "installedAt": "2026-01-25T05:40:38.055Z",
+        "lastUpdated": "2026-02-20T20:35:57.692Z",
+        "gitCommitSha": "e30768372b4150ca1bc0839d93283e8edc30d60d"
+      }
+    ],
+    "playground@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/playground/aa296ec81e8c",
+        "version": "aa296ec81e8c",
+        "installedAt": "2026-02-18T01:46:30.602Z",
+        "lastUpdated": "2026-02-20T20:35:57.693Z",
+        "gitCommitSha": "261ce4fba4f2c314c490302158909a32e5889c88"
+      }
+    ],
+    "gh-cli@trailofbits": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/trailofbits/gh-cli/1.3.0",
+        "version": "1.3.0",
+        "installedAt": "2026-02-23T04:12:51.298Z",
+        "lastUpdated": "2026-02-23T04:12:51.298Z",
+        "gitCommitSha": "60ab7b0fe0ac2132a5cd484d109e9f0ff2ddd63e"
+      }
+    ],
+    "git-cleanup@trailofbits": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/trailofbits/git-cleanup/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-02-23T04:13:36.680Z",
+        "lastUpdated": "2026-02-23T04:13:36.680Z",
+        "gitCommitSha": "60ab7b0fe0ac2132a5cd484d109e9f0ff2ddd63e"
+      }
+    ],
+    "workflow-skill-design@trailofbits": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/trailofbits/workflow-skill-design/1.0.1",
+        "version": "1.0.1",
+        "installedAt": "2026-02-23T04:14:45.790Z",
+        "lastUpdated": "2026-02-23T04:14:45.790Z",
+        "gitCommitSha": "60ab7b0fe0ac2132a5cd484d109e9f0ff2ddd63e"
+      }
+    ],
+    "variant-analysis@trailofbits": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/trailofbits/variant-analysis/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-02-23T04:15:19.479Z",
+        "lastUpdated": "2026-02-23T04:15:19.479Z",
+        "gitCommitSha": "60ab7b0fe0ac2132a5cd484d109e9f0ff2ddd63e"
+      }
+    ],
+    "spec-to-code-compliance@trailofbits": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/trailofbits/spec-to-code-compliance/1.1.0",
+        "version": "1.1.0",
+        "installedAt": "2026-02-23T04:16:08.031Z",
+        "lastUpdated": "2026-02-23T04:16:08.031Z",
+        "gitCommitSha": "60ab7b0fe0ac2132a5cd484d109e9f0ff2ddd63e"
+      }
+    ],
+    "sharp-edges@trailofbits": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/trailofbits/sharp-edges/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-02-23T04:16:23.848Z",
+        "lastUpdated": "2026-02-23T04:16:23.848Z",
+        "gitCommitSha": "60ab7b0fe0ac2132a5cd484d109e9f0ff2ddd63e"
+      }
+    ],
+    "differential-review@trailofbits": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/trailofbits/differential-review/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-02-23T04:16:39.222Z",
+        "lastUpdated": "2026-02-23T04:16:39.222Z",
+        "gitCommitSha": "60ab7b0fe0ac2132a5cd484d109e9f0ff2ddd63e"
+      }
+    ],
+    "second-opinion@trailofbits": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/trailofbits/second-opinion/1.5.1",
+        "version": "1.5.1",
+        "installedAt": "2026-02-23T04:17:27.963Z",
+        "lastUpdated": "2026-02-23T04:17:27.963Z",
+        "gitCommitSha": "60ab7b0fe0ac2132a5cd484d109e9f0ff2ddd63e"
+      }
+    ],
+    "property-based-testing@trailofbits": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/trailofbits/property-based-testing/1.1.0",
+        "version": "1.1.0",
+        "installedAt": "2026-02-23T04:17:44.749Z",
+        "lastUpdated": "2026-02-23T04:17:44.749Z",
+        "gitCommitSha": "60ab7b0fe0ac2132a5cd484d109e9f0ff2ddd63e"
+      }
+    ],
+    "insecure-defaults@trailofbits": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/trailofbits/insecure-defaults/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-02-23T04:17:52.654Z",
+        "lastUpdated": "2026-02-23T04:17:52.654Z",
+        "gitCommitSha": "60ab7b0fe0ac2132a5cd484d109e9f0ff2ddd63e"
+      }
+    ],
+    "audit-context-building@trailofbits": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/trailofbits/audit-context-building/1.1.0",
+        "version": "1.1.0",
+        "installedAt": "2026-02-23T04:18:52.137Z",
+        "lastUpdated": "2026-02-23T04:18:52.137Z",
+        "gitCommitSha": "60ab7b0fe0ac2132a5cd484d109e9f0ff2ddd63e"
+      }
+    ],
+    "ask-questions-if-underspecified@trailofbits": [
+      {
+        "scope": "user",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/trailofbits/ask-questions-if-underspecified/1.0.1",
+        "version": "1.0.1",
+        "installedAt": "2026-02-23T04:19:06.699Z",
+        "lastUpdated": "2026-02-23T04:19:06.699Z",
+        "gitCommitSha": "60ab7b0fe0ac2132a5cd484d109e9f0ff2ddd63e"
+      }
+    ]
+  }
+}
