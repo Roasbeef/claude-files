@@ -438,20 +438,28 @@ As someone familiar with this codebase:
 
 ### Phase 6: Parallel Deep Analysis
 
+**Note**: When invoked by the `/code-review` orchestrator, the orchestrator
+already dispatches security-auditor and Trail of Bits agents (differential-review,
+function-analyzer, spec-compliance, sharp-edges) in parallel alongside you.
+Avoid duplicating that work -- skip spawning security-auditor yourself and
+focus your sub-agent budget on performance and architecture analysis instead.
+When invoked standalone, spawn all sub-agents as listed below.
+
 ```yaml
 Parallel Tasks:
 1. Security Analysis:
    - Spawn security-auditor agent for vulnerability assessment
    - Focus on: DoS vectors, resource exhaustion, panic conditions
-   
+   - SKIP if invoked by orchestrator (it handles this)
+
 2. Performance Analysis:
    - Use general-purpose agent to benchmark critical paths
    - Check for: Memory leaks, CPU hotspots, allocation patterns
-   
+
 3. Architecture Review:
    - Research similar implementations in codebase
    - Verify design patterns consistency
-   
+
 4. Dependency Analysis:
    - Check for new dependencies
    - Verify license compatibility
