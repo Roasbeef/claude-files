@@ -4,10 +4,10 @@
     "code-review@claude-plugins-official": [
       {
         "scope": "user",
-        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/code-review/aa296ec81e8c",
-        "version": "aa296ec81e8c",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/code-review/205b6e0b3036",
+        "version": "205b6e0b3036",
         "installedAt": "2025-12-28T03:19:16.402Z",
-        "lastUpdated": "2026-02-20T20:35:57.692Z",
+        "lastUpdated": "2026-03-04T01:36:06.029Z",
         "gitCommitSha": "51437a45cafcb760b17c747fa1c4ae9872dce503"
       }
     ],
@@ -45,20 +45,20 @@
     "frontend-design@claude-plugins-official": [
       {
         "scope": "user",
-        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/frontend-design/aa296ec81e8c",
-        "version": "aa296ec81e8c",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/frontend-design/205b6e0b3036",
+        "version": "205b6e0b3036",
         "installedAt": "2026-01-25T05:40:38.055Z",
-        "lastUpdated": "2026-02-20T20:35:57.692Z",
+        "lastUpdated": "2026-03-04T01:36:06.030Z",
         "gitCommitSha": "e30768372b4150ca1bc0839d93283e8edc30d60d"
       }
     ],
     "playground@claude-plugins-official": [
       {
         "scope": "user",
-        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/playground/aa296ec81e8c",
-        "version": "aa296ec81e8c",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/playground/205b6e0b3036",
+        "version": "205b6e0b3036",
         "installedAt": "2026-02-18T01:46:30.602Z",
-        "lastUpdated": "2026-02-20T20:35:57.693Z",
+        "lastUpdated": "2026-03-04T01:36:06.030Z",
         "gitCommitSha": "261ce4fba4f2c314c490302158909a32e5889c88"
       }
     ],
