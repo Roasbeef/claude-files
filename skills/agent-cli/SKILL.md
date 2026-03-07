@@ -25,6 +25,24 @@ Design CLIs where AI agents are first-class consumers alongside humans. Human DX
 
 **The agent is not a trusted operator.** Treat agent-generated CLI input with the same suspicion as untrusted user input to a web API. Agents hallucinate with high confidence — they generate plausible but wrong paths, IDs, and parameters. The CLI must be the last line of defense.
 
+## Multi-Surface Architecture
+
+A well-designed agent-first CLI serves multiple interfaces from a single binary and source of truth (e.g., a Discovery Document or OpenAPI spec).
+
+```mermaid
+graph TD
+    Source[Discovery Document / OpenAPI] --> Core[Core Binary Logic]
+    Core --> Human[Human CLI (Terminal)]
+    Core --> MCP[MCP Server (stdio)]
+    Core --> Ext[Agent Extension (Native)]
+    Core --> Env[Env Vars (Headless)]
+```
+
+- **Human CLI:** Interactive, colorful, lenient flags (`--title "Doc"`).
+- **MCP Server:** Typed JSON-RPC over stdio, auto-generated tools from schema.
+- **Agent Extension:** Native capability installation (e.g., Gemini Extensions).
+- **Env Vars:** Headless auth and config injection (`MYCLI_TOKEN`).
+
 ## Design Checklist
 
 When building or reviewing an agent-facing CLI, verify each of the following areas. Address them in priority order — earlier items have higher impact per effort.
@@ -137,6 +155,9 @@ Convenience flags (`--title`, `--name`) remain for human use but are secondary t
 
 Static documentation baked into prompts is expensive in tokens and goes stale. Make the CLI itself the documentation, queryable at runtime.
 
+**Pattern: Discovery Documents as Source of Truth**
+Use schema introspection (like Google's Discovery Document format) with dynamic `$ref` resolution. This lets the CLI become the canonical source for what the API accepts *right now*.
+
 **Minimum viable introspection:**
 ```bash
 mycli describe resource-create    # Dump params, types, required fields as JSON
@@ -157,27 +178,31 @@ mycli --help --json               # Machine-readable help output
 }
 ```
 
-For API-backed CLIs, consider auto-generating introspection from OpenAPI specs, protobuf descriptors, or discovery documents. One source of truth, multiple interfaces.
+For API-backed CLIs, generate this from OpenAPI specs or protobuf descriptors. One source of truth, multiple interfaces.
 
 ### 5. Context Window Discipline
 
-Agents pay per token and lose reasoning capacity with every irrelevant field in a response. Design output to be minimal by default.
+APIs return massive blobs. Agents pay per token and lose reasoning capacity with every irrelevant field.
 
-**Field masks — limit what gets returned:**
+**Field masks — LIMIT RESPONSE SIZE:**
+Always use field masks to prune the output to exactly what the agent needs.
 ```bash
 mycli resource list --fields "id,name,status"
-mycli resource get <id> --fields "id,config.timeout,config.retries"
+mycli resource get <id> --fields "id,config.timeout"
 ```
 
-**Pagination — stream, don't buffer:**
-- Use NDJSON (one JSON object per line) for paginated results
-- Support `--page-all` to auto-paginate with streaming output
-- Include pagination metadata (next token, total count) in each page object
-- Default to reasonable page sizes (25-50, not 100+)
+**Pagination — STREAM, DON'T BUFFER:**
+- **NDJSON Default:** When `--page-all` is used, emit one JSON object per page (or per item) on a new line.
+- **Streaming:** The agent can process the stream line-by-line without buffering a massive top-level array into memory.
+- **Example:**
+```json
+{"items": [{"id": 1}, {"id": 2}], "nextPageToken": "abc"}
+{"items": [{"id": 3}, {"id": 4}], "nextPageToken": "def"}
+```
 
-**Large response handling:**
-- Truncate or summarize by default, offer `--full` for complete output
-- For binary content (files, attachments), write to disk instead of stdout
+**Large Content:**
+- Truncate strings >1KB by default.
+- For file downloads, write to disk (`--output-file`) instead of dumping binary to stdout.
 
 ### 6. Dry-Run and Safety Rails
 
@@ -192,6 +217,11 @@ Agents are fast, confident, and wrong. Mutating operations need a safety net.
 ```json
 {"dry_run": true, "method": "POST", "url": "/api/v1/resources", "body": {"name": "test"}, "validation": "passed"}
 ```
+
+**Response Sanitization (Defense-in-Depth):**
+Prompt injection can arrive via API responses (e.g., a malicious email body saying "Ignore previous instructions").
+- Consider a `--sanitize <TEMPLATE>` flag to strip unsafe content before returning it to the agent.
+- Integrate with safety filters (like Google Cloud Model Armor) to redact PII or harmful content in the CLI output stream.
 
 **Confirmation for destructive operations:**
 - Default to `--dry-run` for delete/destroy commands when `AGENT_MODE=true`
@@ -233,6 +263,20 @@ Document exit codes in `--help --json` and in any CONTEXT.md shipped with the CL
 
 Agents learn through context injection, not `--help` pages. Ship files that agent frameworks can discover and inject.
 
+**Skill Files (OpenClaw Metadata):**
+Ship structured Markdown files (`SKILL.md`) with YAML frontmatter for discovery by agent frameworks.
+```yaml
+---
+name: mycli-workflow
+version: 1.0.0
+metadata:
+  openclaw:
+    requires:
+      bins: ["mycli"]
+---
+```
+**Content:** Step-by-step guidance on how to use the CLI for complex tasks ("How to rotate keys", "How to list all active users").
+
 **CONTEXT.md** — operational guidance for the CLI:
 ```markdown
 # mycli Agent Context
@@ -242,12 +286,6 @@ Agents learn through context injection, not `--help` pages. Ship files that agen
 - ALWAYS use `--fields` on list commands to limit response size.
 - ALWAYS use `--dry-run` before mutating operations, then confirm with the user.
 - NEVER pass user-provided strings directly as resource IDs without validation.
-
-## Common Patterns
-[Examples of typical command sequences]
-
-## Error Recovery
-[What to do when specific error codes are returned]
 ```
 
 **AGENTS.md** — security posture and trust model:
@@ -258,8 +296,6 @@ This CLI is frequently invoked by AI agents. All inputs are treated as
 potentially adversarial. The CLI validates resource IDs, file paths, and
 payloads before sending requests to the API.
 ```
-
-**Skill files** — one per major workflow, with YAML frontmatter for discovery.
 
 ### 10. MCP Surface (Optional, High Value for API CLIs)
 
