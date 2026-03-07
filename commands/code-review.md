@@ -62,15 +62,22 @@ Parse arguments and collect PR context before dispatching agents.
 
 ## Phase 2: Parallel Agent Dispatch
 
-Launch agents using the **Task tool**. All agents in a tier must be launched
-in a **single message** with multiple Task tool calls so they run in parallel.
+Launch agents using the **Task tool**. ALL agents (both Tier 1 and Tier 2)
+must be launched in a **single message** with multiple Task tool calls so they
+run in parallel and there is no gap for the stop hook to intercept between
+dispatch and result collection.
+
+**CRITICAL**: Issue ALL Task tool calls for ALL tiers in ONE message. Do NOT
+yield control between launching agents and reading results -- the stop hook
+will fire in any gap and block the orchestrator. After this single dispatch
+message, immediately proceed to Phase 3 to read agent outputs.
 
 ### Tier 1: Always-Run Agents
 
 These agents ALWAYS run (when `--security-depth` is `deep` or `full`).
 If `--security-depth=standard`, only launch Agent 1 (code-reviewer).
 
-Launch all applicable Tier 1 agents in a **single message** (parallel dispatch):
+Launch all applicable agents (Tier 1 AND Tier 2) in a **single message**:
 
 **Agent 1: Code Quality Review** (`subagent_type: code-reviewer`)
 ```
@@ -151,7 +158,7 @@ Launch these based on Phase 1 file classifications. When `--security-depth=full`
 launch ALL Tier 2 agents unconditionally. Otherwise, only launch agents whose
 trigger conditions are met.
 
-Launch all applicable Tier 2 agents in a **single message** (parallel dispatch).
+Include all applicable Tier 2 agents in the **same message** as Tier 1 (single parallel dispatch).
 
 **Agent 4: Deep Function Analysis** (`subagent_type: audit-context-building:function-analyzer`)
 - **Trigger**: Changed files classified as Crypto/Auth, Consensus/Protocol,
@@ -345,13 +352,17 @@ Write the final report to `.reviews/{owner}_{repo}_PR_{pr_number}_review.md`.
 
 ## Important Notes
 
-- Always launch Tier 1 agents in a SINGLE message with multiple Task tool
-  calls so they execute in parallel.
-- If Tier 2 agents are triggered, launch them in a SECOND parallel batch
-  after determining triggers from Phase 1.
-- Do NOT wait for Tier 1 to complete before launching Tier 2 -- both tiers
-  can run simultaneously if trigger conditions are known from Phase 1.
+- **CRITICAL: Single-message dispatch.** Launch ALL agents (Tier 1 AND Tier 2)
+  in ONE message with multiple Task tool calls. The stop hook fires on every
+  turn boundary -- if you yield control between dispatch and result reading,
+  the hook will block the orchestrator. Determine Tier 2 triggers during
+  Phase 1, then issue every Task call in a single turn.
+- After the dispatch message completes, immediately proceed to Phase 3 to
+  read agent outputs and compile the report. Do not yield between phases.
 - The code-reviewer agent handles its own review file writing. Read its
   output after it completes and incorporate into the unified report.
 - When `--security-depth=standard`, skip all security agents and just run
   the code-reviewer alone. This is the fast path for low-risk PRs.
+- The stop hook SHOULD fire after the final report is written -- that is the
+  correct time, since the orchestrator is done and should listen for mail
+  (e.g., review feedback from the user or other agents).
