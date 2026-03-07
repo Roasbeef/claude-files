@@ -31,11 +31,13 @@ To perform agentic code reasoning, follow this iterative protocol to generate a 
 - **Action:**
     - **Control Flow:** Trace the path step-by-step (e.g., "Enter if block").
     - **Data Flow:** Track the state of key variables (e.g., "x is now Tainted").
+    - **Loop Analysis:** For loops, explicitly trace "Iteration 0", "Iteration 1", and "Iteration N" to catch boundary errors.
+- **Micro-Experiments:** You MAY use `run_shell_command` to execute small, isolated scripts (e.g., `python3 -c ...`) to verify *language semantics* (e.g., regex behavior, float precision), but NEVER to run the project's own code or tests.
 - **Interprocedurality:** If a function is called, you MUST read its definition and include its trace as a sub-step.
 - **Format:**
     1. `[Trace Step 1] Entry point <function> called with <params>.`
     2. `[Data Flow] Variable <user_input> is untrusted.`
-    3. `[Trace Step 2] Evaluating condition <x > y>. Result: TRUE.`
+    3. `[Loop Analysis] Iteration 0: i=0, condition true. Iteration 1: ...`
 
 ### Phase 3: Property Verification & Divergence Analysis
 - **Goal:** Prove or disprove the target property (e.g., "is there a bug?", "are these equivalent?").
