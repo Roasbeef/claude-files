@@ -1,4 +1,8 @@
 {
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
   "permissions": {
     "allow": [
       "Bash(npx uuid v7)",
@@ -39,7 +43,6 @@
     ],
     "defaultMode": "bypassPermissions"
   },
-  "model": "opus",
   "hooks": {
     "Notification": [
       {
@@ -49,6 +52,18 @@
             "type": "command",
             "command": "~/.claude/hooks/substrate/notification.sh",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/substrate/pretooluse_plan.sh",
+            "timeout": 345600
           }
         ]
       }
@@ -101,16 +116,6 @@
       {
         "matcher": "",
         "hooks": []
-      },
-      {
-        "matcher": "ExitPlanMode",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/substrate/pretooluse_plan.sh",
-            "timeout": 600
-          }
-        ]
       }
     ],
     "SessionEnd": [
@@ -155,7 +160,7 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/substrate/stop.sh",
-            "timeout": 600
+            "timeout": 345600
           }
         ]
       }
@@ -205,23 +210,23 @@
     "command": "input=$(cat); cwd=\"$(echo \"$input\" | jq -r '.workspace.current_dir')\"; model=\"$(echo \"$input\" | jq -r '.model.display_name')\"; if [ -d \"$cwd/.git\" ]; then cd \"$cwd\" 2>/dev/null && branch=$(git branch --show-current 2>/dev/null); if [ -n \"$branch\" ]; then git_info=\" [$branch]\"; else git_info=\" [detached]\"; fi; changes=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' '); if [ \"$changes\" -gt 0 ]; then git_info=\"$git_info *\"; fi; else git_info=\"\"; fi; printf \"⛰ %s | %s%s | %s\" \"$(whoami)\" \"$(basename \"$cwd\")\" \"$git_info\" \"$model\""
   },
   "enabledPlugins": {
+    "ask-questions-if-underspecified@trailofbits": true,
+    "audit-context-building@trailofbits": true,
     "code-review@claude-plugins-official": true,
+    "differential-review@trailofbits": true,
     "frontend-design@claude-plugins-official": true,
-    "gopls-lsp@claude-plugins-official": true,
-    "playground@claude-plugins-official": true,
-    "ralph-wiggum@claude-plugins-official": false,
     "gh-cli@trailofbits": true,
     "git-cleanup@trailofbits": true,
-    "workflow-skill-design@trailofbits": true,
-    "variant-analysis@trailofbits": true,
-    "spec-to-code-compliance@trailofbits": true,
-    "sharp-edges@trailofbits": true,
-    "differential-review@trailofbits": true,
-    "second-opinion@trailofbits": true,
-    "property-based-testing@trailofbits": true,
+    "gopls-lsp@claude-plugins-official": true,
     "insecure-defaults@trailofbits": true,
-    "audit-context-building@trailofbits": true,
-    "ask-questions-if-underspecified@trailofbits": true
+    "playground@claude-plugins-official": true,
+    "property-based-testing@trailofbits": true,
+    "ralph-wiggum@claude-plugins-official": false,
+    "second-opinion@trailofbits": true,
+    "sharp-edges@trailofbits": true,
+    "spec-to-code-compliance@trailofbits": true,
+    "variant-analysis@trailofbits": true,
+    "workflow-skill-design@trailofbits": true
   },
   "sandbox": {
     "enabled": true,
@@ -252,12 +257,15 @@
       "git",
       "gh",
       "npx playwright",
-      "bun run test:e2e"
+      "bun run test:e2e",
+      "qmd"
     ]
   },
   "alwaysThinkingEnabled": true,
+  "voiceEnabled": true,
   "skipDangerousModePermissionPrompt": true,
   "feedbackSurveyState": {
     "lastShownTime": 1753983872081
-  }
+  },
+  "model": "opus[1m]"
 }

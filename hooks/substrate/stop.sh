@@ -85,7 +85,6 @@ list_incomplete_tasks() {
         local status=$(jq -r '.status // "pending"' "$task_file" 2>/dev/null)
         if [ "$status" != "completed" ]; then
             local id=$(jq -r '.id' "$task_file" 2>/dev/null)
-            local subject=$(jq -r '.subject' "$task_file" 2>/dev/null | head -c 50)
             output="${output}#${id} [${status}], "
         fi
     done
@@ -130,9 +129,11 @@ mkdir -p "$(dirname "$debug_log")"
 echo "=== Stop Hook Step 4: $(date) ===" >> "$debug_log"
 echo "session_args: [$session_args]" >> "$debug_log"
 
-# Record start time so we can fill the full 9m30s window on failure.
+# Record start time so we can fill the poll window on failure.
+# Match the 4-day hook timeout so the poll blocks essentially forever.
+# The server-side long-poll handles wake-on-message internally.
 start_time=$(date +%s)
-max_duration=570  # 9m30s
+max_duration=345000  # ~4 days, just under hook timeout
 
 poll_output=$(substrate poll $session_args --wait=${max_duration}s --format hook --always-block 2>&1)
 poll_exit=$?
