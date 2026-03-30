@@ -85,8 +85,8 @@ services:
           $${LND_EXTRA_ARGS:-}
     ports:
       - "9735:9735"
-      - "10009:10009"
-      - "8080:8080"
+      - "10035:10009"
+      - "8180:8080"
     volumes:
       - lnd-alice-data:/root/.lnd
     networks:
@@ -124,8 +124,8 @@ services:
           $${LND_EXTRA_ARGS:-}
     ports:
       - "9736:9735"
-      - "10010:10009"
-      - "8081:8080"
+      - "10034:10009"
+      - "8182:8080"
     volumes:
       - lnd-bob-data:/root/.lnd
     networks:
