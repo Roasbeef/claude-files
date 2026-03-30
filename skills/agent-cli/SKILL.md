@@ -306,7 +306,7 @@ metadata:
 
 ## Critical Rules
 - ALWAYS use `--output json` when invoking programmatically.
-- ALWAYS use `--fields` on list commands to limit response size.
+- ALWAYS use `--fields` (or field masks) on list commands to avoid overwhelming the context window with massive JSON blobs.
 - ALWAYS use `--dry-run` before mutating operations, then confirm with the user.
 - NEVER pass user-provided strings directly as resource IDs without validation.
 ```
