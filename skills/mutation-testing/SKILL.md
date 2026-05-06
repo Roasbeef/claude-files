@@ -1,206 +1,221 @@
 ---
 name: mutation-testing
-description: Validates test suite quality through mutation testing. Generates intelligent code mutations, runs tests to verify they catch the changes, and identifies gaps in test coverage. Use when evaluating test effectiveness, validating newly written tests, or improving test quality for mission-critical code.
+description: Validates Go test suite quality through mutation testing using go-gremlins/gremlins. Mutates production code, runs the test suite against each mutant, and reports which mutants the tests fail to kill — exposing weak assertions that line coverage cannot detect. Use when evaluating test effectiveness, validating newly written tests, or improving test quality for mission-critical code (consensus, channel state, payment flows, crypto). Triggers: "mutation test", "are these tests strong", "validate test quality", "/mutation-testing".
 ---
 
 # Mutation Testing
 
-Mutation testing evaluates test quality by introducing small, deliberate bugs (mutations) into code and checking if tests catch them. This provides a behavioral measure of test effectiveness beyond simple coverage metrics.
+Mutation testing evaluates test quality by introducing small, deliberate bugs into production code (mutants) and checking whether the test suite fails. A test that passes on a mutant did not actually verify the behavior the mutant changed.
 
-## Core Concept
+This skill is a thin orchestrator over [`go-gremlins/gremlins`](https://github.com/go-gremlins/gremlins) — a maintained Go mutation testing tool. The skill provides install, run, and analysis wrappers that produce machine-readable JSON for downstream tooling (notably the `test-refine` skill).
 
-**Mutation testing workflow**:
-1. Generate mutations (small code changes)
-2. Run test suite against each mutation
-3. Classify results:
-   - **Killed**: Test fails (good - test caught the bug)
-   - **Survived**: Test passes (bad - test missed the bug)
-   - **Timeout**: Test hangs or exceeds time limit
-4. Calculate mutation score: `killed / (total - timeouts)`
-5. For survived mutants, generate targeted tests
+## Why Mutation Testing
 
-**Why mutation testing matters**: Tests can achieve 100% line coverage while missing critical bugs. Mutation testing reveals if tests actually verify behavior or just execute code.
+A test suite can hit 100% line coverage and still be useless: tests can execute code without asserting on its results, or assert only on side-irrelevant fields. Mutation testing closes this gap by checking whether the test suite distinguishes the original code from a mutant. See `references/coverage-pitfalls.md` (in the `test-refine` skill) for the broader context.
 
-## When to Use Mutation Testing
+## When to Use
 
-Use mutation testing proactively for:
+- After generating tests with `test-forge` or by hand — verify they have real assertions.
+- Before merging consensus / payment / crypto code — quality gate on critical paths.
+- During code review — surface weak tests in the diff.
+- As a signal source for `test-refine` — survivors map to weak-assertion findings.
 
-- **After test generation**: Validate that newly written tests are effective
-- **Mission-critical code**: Ensure financial, consensus, or security-critical code has thorough tests
-- **PR reviews**: Quality gate to prevent merging code with weak tests
-- **Refactoring**: Verify tests catch regressions before changing code
-- **Complex logic**: Validate tests for boundary conditions, error handling, state machines
+**Target efficacy** (gremlins terminology: `test_efficacy = killed / (killed + lived)`):
 
-**Target mutation scores**:
-- Mission-critical code: 90%+
-- Core business logic: 80-90%
-- General code: 70-80%
-- Low-risk code: 60-70%
+| Code class | Target |
+|---|---|
+| Mission-critical (consensus, wallet, channel, crypto) | 90%+ |
+| Core business logic | 80–90% |
+| General code | 70–80% |
+| Trivial/glue code | run only if cheap |
 
-## AST-Based Mutation Generation
+## Workflow
 
-This skill uses Go's `go/ast` and `go/parser` packages to generate intelligent mutations by analyzing code structure.
-
-**Standard Go mutations**:
-- Arithmetic operators: +, -, *, /, %
-- Relational operators: <, <=, >, >=, ==, !=
-- Logical operators: &&, ||, negation
-- Conditional boundaries: off-by-one errors
-- Statement removal: delete return, assignment, defer
-- Constant changes: 0, 1, true, false, nil
-
-See [mutation_operators.md](references/mutation_operators.md) for complete catalog.
-
-## Using the Scripts
-
-All scripts are executable Go programs invoked via shell wrappers.
-
-### 1. Generate Mutations
+### 1. Install gremlins (once)
 
 ```bash
-~/.claude/skills/mutation-testing/scripts/generate-mutations.sh --file wallet.go --output mutations.json
+~/.claude/skills/mutation-testing/scripts/install-gremlins.sh
 ```
 
-Analyzes Go source file and generates mutation plan with AST node locations.
+The script pins to a known-good version (override with `GREMLINS_VERSION=...`). Requires `go` on `PATH` and `$(go env GOPATH)/bin` on `PATH`.
 
-### 2. Run Mutation Tests
+### 2. Run mutations
 
 ```bash
-~/.claude/skills/mutation-testing/scripts/run-mutation-test.sh --mutation-file mutations.json --mutation-id M0 --package ./internal/wallet --output results/M0.json
+# Default: cwd, JSON to .reviews/mutations/<slug>.json
+~/.claude/skills/mutation-testing/scripts/unleash.sh
+
+# Targeted package
+~/.claude/skills/mutation-testing/scripts/unleash.sh \
+    --pkg ./internal/wallet \
+    --output .reviews/mutations/wallet.json
+
+# With integration tests and a config file
+~/.claude/skills/mutation-testing/scripts/unleash.sh \
+    --pkg ./internal/channel \
+    --integration \
+    --config .gremlins.yaml \
+    --silent
 ```
 
-Applies specific mutation, runs tests, reports if mutant was killed or survived.
-
-### 3. Parse Results
+### 3. Analyze survivors
 
 ```bash
-~/.claude/skills/mutation-testing/scripts/parse-results.sh --results 'results/*.json' --output report.json
+~/.claude/skills/mutation-testing/scripts/analyze-survivors.sh \
+    --input .reviews/mutations/wallet.json \
+    --output .reviews/mutations/wallet.md
 ```
 
-Aggregates mutation results and calculates mutation score.
+Produces a markdown report with: efficacy/coverage summary, survivors ranked by file (consensus/channel/wallet paths bubble to the top), and mutator-type breakdown.
 
-## Integration with Agents
+## Gremlins JSON Schema
 
-### mutation-tester Agent
+`gremlins unleash --output <file>` emits a single JSON document:
 
-The `mutation-tester` agent orchestrates the mutation testing workflow:
-1. Analyzes target code (from git diff or specified files)
-2. Generates intelligent mutations using AST analysis
-3. Runs tests for each mutation in parallel when possible
-4. Identifies surviving mutants and analyzes why tests didn't catch them
-5. Generates targeted tests to kill survivors
-6. Re-runs mutations to verify improvements
-7. Produces detailed mutation report in `.reviews/mutations/`
-
-### test-engineer Integration
-
-After `test-engineer` generates tests, use mutation testing to validate effectiveness:
-
+```json
+{
+  "go_module": "github.com/example/foo",
+  "test_efficacy": 82.00,
+  "mutations_coverage": 80.00,
+  "mutants_total": 100,
+  "mutants_killed": 82,
+  "mutants_lived": 8,
+  "mutants_not_viable": 2,
+  "mutants_not_covered": 10,
+  "elapsed_time": 123.456,
+  "files": [
+    {
+      "file_name": "wallet.go",
+      "mutations": [
+        { "line": 42, "column": 8, "type": "CONDITIONALS_NEGATION", "status": "KILLED" }
+      ]
+    }
+  ]
+}
 ```
-User: "Generate tests for CalculateFee function"
-[test-engineer creates comprehensive tests]
-User: "Run mutation testing to validate"
-[mutation-tester verifies test quality]
+
+**Mutation status values**:
+
+| Status | Meaning | Action |
+|---|---|---|
+| `KILLED` | Test suite caught the mutation | Good — no action |
+| `LIVED` | Tests passed despite mutation | **Survivor** — strengthen tests |
+| `NOT COVERED` | Mutation in code no test exercises | Add a test for that path |
+| `TIMED OUT` | Tests timed out — implicit kill | Investigate (might be perf bug) |
+| `NOT VIABLE` | Mutation produced uncompilable code | Excluded from score |
+| `RUNNABLE` | Dry-run only; would be tested | (only in `--dry-run`) |
+
+**Key metrics**:
+- `test_efficacy` = `killed / (killed + lived)` — quality of assertions on covered code.
+- `mutations_coverage` = `(killed + lived) / (killed + lived + not_covered)` — how much code is exercised at all.
+
+A high `mutations_coverage` with low `test_efficacy` means tests run code without verifying its behavior — the classic "100% line coverage, 0% real testing" failure mode.
+
+## Configuration
+
+Gremlins is configured via `.gremlins.yaml` (or `--config <path>`). Mutators ship default-on for safe operators and default-off for aggressive ones.
+
+**Default-on mutators** (always enabled):
+- `arithmetic-base` — `+ - * / %`
+- `conditionals-boundary` — `< <= > >=`
+- `conditionals-negation` — `== !=`, boolean conditions
+- `increment-decrement` — `++ --`
+- `invert-negatives` — `-x` ↔ `+x`
+
+**Default-off mutators** — enable for critical packages:
+- `invert-assignments` — `+= -= *= /=` etc. swaps
+- `invert-bitwise` — `& | ^` swaps
+- `invert-bwassign` — `&= |= ^=` swaps
+- `invert-logical` — `&& ↔ ||` (security-critical: catches auth bypass mutations)
+- `invert-loopctrl` — `break ↔ continue`
+- `remove-self-assignments` — drop `x = x op y` updates
+
+**Recommended config for consensus/wallet/payment code**:
+
+```yaml
+silent: false
+unleash:
+  workers: 0          # use all CPUs
+  test-cpu: 0         # no per-test CPU pinning
+  threshold:
+    efficacy: 90      # fail if below 90%
+    mutant-coverage: 85
+mutants:
+  arithmetic-base:        { enabled: true }
+  conditionals-boundary:  { enabled: true }
+  conditionals-negation:  { enabled: true }
+  increment-decrement:    { enabled: true }
+  invert-negatives:       { enabled: true }
+  invert-assignments:     { enabled: true }
+  invert-bitwise:         { enabled: true }
+  invert-bwassign:        { enabled: true }
+  invert-logical:         { enabled: true }   # critical for && / || in auth
+  invert-loopctrl:        { enabled: true }
+  remove-self-assignments:{ enabled: true }
 ```
 
-### code-reviewer Integration
+See [gremlins.dev configuration docs](https://gremlins.dev/0.5/usage/configuration/) for the full schema.
 
-Include mutation scores in PR reviews:
+## Threshold Gating (CI)
 
+For CI, use `--silent` and set thresholds in config or via env vars:
+
+```bash
+gremlins unleash --silent --output mutations.json ./...
+# Exit nonzero if efficacy < threshold.
 ```
-User: "/code-review owner/repo#123"
-[code-reviewer analyzes changes, invokes mutation-tester]
-Review includes: "Mutation score: 82% (18/22 killed), recommend 3 additional tests"
-```
+
+The `unleash.threshold.efficacy` and `unleash.threshold.mutant-coverage` keys cause gremlins to exit nonzero when the run falls below the configured percentages — wire this into your PR check.
+
+## Integration with Other Skills
+
+### `test-refine`
+
+The `test-refine` skill consumes gremlins JSON to identify weak-assertion zones (smell `S12: mutation-survivor`). When invoked with `--use-mutations`, it calls `unleash.sh` and cross-references `LIVED` mutants with the AST smell scan.
+
+### `test-forge`
+
+After `test-forge` generates tests, run mutation testing to validate them. `LIVED` mutants are direct evidence of weak assertions in the generated tests.
+
+### `code-review`
+
+Include the test_efficacy delta in PR review — regression of >5% in covered code is a strong signal of weakening test quality.
 
 ## Interpreting Results
 
-### High mutation score (>85%)
-Tests are thorough and catch most bugs. Focus on surviving mutants if any are high-impact.
+**High efficacy (≥90%)**: Tests have strong assertions. Focus remaining work on `NOT COVERED` mutants (uncovered code paths).
 
-### Medium mutation score (70-85%)
-Tests cover major paths but miss edge cases. Review survivors and add boundary tests.
+**Medium (75–90%)**: Tests cover main paths. Survivors usually indicate boundary or error-path gaps.
 
-### Low mutation score (<70%)
-Significant test gaps. Tests may only verify happy paths. Add error handling, boundary, and negative tests.
+**Low (<75%)**: Significant gaps — tests likely run code without checking outputs. Pair with `test-refine` to identify the specific smells.
 
-### Surviving mutants
-For each survivor, consider:
-- **Equivalent mutant**: Mutation doesn't change behavior (can ignore)
-- **Missing test**: Need test for that code path
-- **Weak assertion**: Test runs code but doesn't verify output
-- **Boundary condition**: Need edge case test
+**Mutator breakdown** tells you the *kind* of weakness:
+- `conditionals-boundary` LIVED → missing edge tests at thresholds.
+- `invert-logical` LIVED → missing truth-table coverage for `&&`/`||`.
+- `arithmetic-base` LIVED → tests don't verify calculation results.
+- `remove-self-assignments` LIVED → state mutations not asserted.
 
-## Best Practices
+## Equivalent Mutants
 
-**Focus on high-impact code**: Run mutation testing on critical paths, not trivial getters/setters.
+Some `LIVED` mutants are semantically equivalent to the original — no test could kill them. Common cases:
+- Mutated value immediately overwritten before being read.
+- Mutation in unreachable code.
+- Operator swap in associative/commutative context with no observable difference.
 
-**Interpret in context**: Mutation score is a signal, not a goal. A 75% score with good tests covering critical paths may be better than 95% with superficial tests.
+When you identify an equivalent mutant, document it (e.g., a comment near the mutation site, or a project-level `EQUIVALENT_MUTANTS.md`) so reviewers don't waste time on it. Gremlins doesn't filter equivalents automatically.
 
-**Handle equivalent mutants**: Some mutations don't change behavior (e.g., i++ vs ++i in some contexts). Flag and ignore these.
+## Gremlins Limitations
 
-**Mutation testing is not fuzzing**: Mutations test if existing tests catch changes. Fuzzing tests if code handles unexpected inputs. Both are valuable but different.
+From the upstream README: gremlins targets *smallish* Go modules (microservices). On very large modules, runs can take hours. Mitigations:
 
-**Iterate**: Use mutation testing to guide test improvement, not as one-time audit.
-
-**Performance**: For large codebases, run mutation testing on changed files only (from git diff). Full mutation testing can be done nightly.
-
-## Example Workflow
-
-```go
-// Original code in wallet.go
-func CalculateFee(amount int64) int64 {
-    if amount > 1000 {
-        return amount / 100
-    }
-    return 10
-}
-
-// Generated mutations:
-// M1: amount >= 1000 (boundary condition)
-// M2: amount < 1000 (relational flip)
-// M3: amount == 1000 (boundary)
-// M4: return amount / 10 (arithmetic change)
-// M5: return 0 (constant change)
-
-// Existing test
-func TestCalculateFee(t *testing.T) {
-    fee := CalculateFee(2000)
-    assert.Equal(t, 20, fee)
-}
-
-// Mutation results:
-// M1: SURVIVED - test doesn't check boundary at 1000
-// M2: KILLED - test with 2000 fails
-// M3: SURVIVED - test doesn't check exact boundary
-// M4: KILLED - wrong calculation detected
-// M5: KILLED - wrong result detected
-
-// Score: 60% (3/5 killed)
-// Generate tests for M1 and M3:
-
-func TestCalculateFee_Boundary(t *testing.T) {
-    // Test exact boundary
-    assert.Equal(t, 10, CalculateFee(1000))
-    // Test just above boundary
-    assert.Equal(t, 10, CalculateFee(1001))
-}
-
-// Re-run: 100% (5/5 killed)
-```
-
-## Troubleshooting
-
-**"No mutations generated"**: Check that file contains mutatable code (not just type definitions or constants).
-
-**"All mutants timeout"**: Tests may be running too slowly or hanging. Check test implementation.
-
-**"Mutation score very low"**: Tests may only check happy paths. Add error cases, boundary tests, and assertions on actual behavior.
-
-**"Cannot compile mutated code"**: Mutation may have violated type constraints. This is a bug in mutation generation - report it.
+- **Per-package runs** via `--pkg ./internal/wallet`. Don't pass `./...` on a 500k-LOC monorepo.
+- **Skip generated code** by using build tags or running on hand-written packages only.
+- **Use `--workers`** to bound parallelism if memory is tight.
+- **Use `--dry-run`** first to preview the mutation count and skip if it's too large.
 
 ## Further Reading
 
-- [references/mutation_operators.md](references/mutation_operators.md) - Complete mutation operator catalog
-- [references/best_practices.md](references/best_practices.md) - Advanced mutation testing patterns
-- Academic paper: "Are Mutants a Valid Substitute for Real Faults in Software Testing?" (Just et al.)
+- [`references/mutation_operators.md`](references/mutation_operators.md) — gremlins mutator catalog with examples.
+- [`references/best_practices.md`](references/best_practices.md) — patterns for boundary, security, and state-machine testing.
+- [Gremlins documentation](https://gremlins.dev/) — full CLI and config reference.
+- "Are Mutants a Valid Substitute for Real Faults in Software Testing?" (Just et al.) — academic foundation.

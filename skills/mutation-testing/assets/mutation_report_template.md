@@ -1,8 +1,9 @@
 # Mutation Testing Report
 
 **Date**: {{DATE}}
-**Package**: {{PACKAGE}}
-**Files Tested**: {{FILE_COUNT}}
+**Module**: {{GO_MODULE}}
+**Scope**: {{SCOPE}}
+**Tool**: gremlins {{GREMLINS_VERSION}}
 
 ---
 
@@ -10,13 +11,17 @@
 
 | Metric | Value |
 |--------|-------|
-| Total Mutations | {{TOTAL_MUTATIONS}} |
-| Killed | {{KILLED}} ({{KILLED_PERCENT}}%) |
-| Survived | {{SURVIVED}} ({{SURVIVED_PERCENT}}%) |
-| Timeouts | {{TIMEOUTS}} |
-| Errors | {{ERRORS}} |
-| **Mutation Score** | **{{MUTATION_SCORE}}%** |
-| Duration | {{DURATION}} seconds |
+| Test efficacy | **{{TEST_EFFICACY}}%** |
+| Mutations coverage | {{MUTATIONS_COVERAGE}}% |
+| Mutants killed | {{MUTANTS_KILLED}} |
+| Mutants LIVED | {{MUTANTS_LIVED}} |
+| Mutants not covered | {{MUTANTS_NOT_COVERED}} |
+| Mutants not viable | {{MUTANTS_NOT_VIABLE}} |
+| Total mutants | {{MUTANTS_TOTAL}} |
+| Elapsed | {{ELAPSED_TIME}}s |
+
+`test_efficacy = killed / (killed + lived)` — fraction of covered mutants that the test suite caught.
+`mutations_coverage = (killed + lived) / (killed + lived + not_covered)` — fraction of code the test suite exercises.
 
 ---
 
@@ -26,166 +31,136 @@
 
 {{QUALITY_MESSAGE}}
 
+Targets:
+
+| Code class | Target efficacy |
+|---|---|
+| Mission-critical | 90%+ |
+| Core business logic | 80–90% |
+| General | 70–80% |
+
 ---
 
-## Surviving Mutants
+## Surviving Mutants (LIVED)
 
-{{#if_survivors}}
-The following mutants survived testing, indicating potential gaps in test coverage:
+The following mutants were not killed by the test suite. Each represents either a missing test, a weak assertion, or an equivalent mutant.
 
-{{#each survivors}}
-### {{INDEX}}. {{FILE}}:{{LINE}}
+{{#if SURVIVORS}}
+| File | Line:Col | Mutator | Implied gap |
+|---|---|---|---|
+{{#each SURVIVORS}}
+| {{FILE}} | {{LINE}}:{{COLUMN}} | `{{TYPE}}` | {{IMPLIED_GAP}} |
+{{/each}}
 
-**Mutation**: {{DESCRIPTION}}
-**ID**: {{MUTATION_ID}}
-**Type**: {{TYPE}}
-**Priority**: {{PRIORITY}}
+### Detail
 
-**Original Code**:
+{{#each SURVIVORS}}
+#### {{FILE}}:{{LINE}}:{{COLUMN}} — `{{TYPE}}`
+
+**Original** (line {{LINE}}):
 ```go
 {{ORIGINAL_CONTEXT}}
 ```
 
-**Mutated Code**:
+**Mutated**:
 ```go
 {{MUTATED_CONTEXT}}
 ```
 
-**Why It Survived**: {{ANALYSIS}}
+**Why this matters**: {{WHY_MATTERS}}
 
-**Recommended Test**:
-```go
-{{RECOMMENDED_TEST}}
-```
+**Recommended action**: {{RECOMMENDED_TEST}}
 
 ---
 
 {{/each}}
-
 {{else}}
-🎉 **All mutants were killed!** Your test suite successfully caught all introduced mutations.
-
-This indicates excellent test quality with comprehensive assertions and edge case coverage.
-
-{{/if_survivors}}
+All covered mutants killed. No survivors.
+{{/if}}
 
 ---
 
-## Mutation Breakdown by Type
+## Mutator Breakdown
 
-| Mutation Type | Generated | Killed | Survived | Score |
-|---------------|-----------|--------|----------|-------|
-{{#each mutation_types}}
-| {{TYPE}} | {{TOTAL}} | {{KILLED}} | {{SURVIVED}} | {{SCORE}}% |
+| Mutator | Killed | LIVED | Not covered | Efficacy |
+|---|---|---|---|---|
+{{#each MUTATOR_STATS}}
+| `{{TYPE}}` | {{KILLED}} | {{LIVED}} | {{NOT_COVERED}} | {{EFFICACY}}% |
+{{/each}}
+
+Use this to identify which *kinds* of mutations the test suite struggles with — see `references/mutation_operators.md` for the implied test gap per mutator.
+
+---
+
+## File Breakdown
+
+| File | Killed | LIVED | Not covered | Efficacy |
+|---|---|---|---|---|
+{{#each FILE_STATS}}
+| {{FILE}} | {{KILLED}} | {{LIVED}} | {{NOT_COVERED}} | {{EFFICACY}}% |
 {{/each}}
 
 ---
 
-## Mutation Breakdown by File
+## Not Covered
 
-| File | Mutations | Killed | Survived | Score |
-|------|-----------|--------|----------|-------|
-{{#each files}}
-| {{FILE}} | {{TOTAL}} | {{KILLED}} | {{SURVIVED}} | {{SCORE}}% |
+{{MUTANTS_NOT_COVERED}} mutations were in code paths no test exercises. These are *coverage* gaps (line/branch), not assertion gaps.
+
+{{#if NOT_COVERED_LIST}}
+| File | Line:Col | Mutator |
+|---|---|---|
+{{#each NOT_COVERED_LIST}}
+| {{FILE}} | {{LINE}}:{{COLUMN}} | `{{TYPE}}` |
 {{/each}}
-
----
-
-## High-Priority Survivors
-
-These surviving mutants are in critical code paths and should be addressed first:
-
-{{#each high_priority_survivors}}
-- **{{FILE}}:{{LINE}}** - {{DESCRIPTION}} ({{PRIORITY}} priority)
-{{/each}}
+{{/if}}
 
 ---
 
 ## Recommendations
 
-Based on the mutation testing results:
+### Immediate
 
-### Immediate Actions
-
-{{#if low_score}}
-1. **Add edge case tests**: Focus on boundary conditions and off-by-one errors
-2. **Strengthen assertions**: Verify actual outputs, not just absence of errors
-3. **Test error paths**: Add negative test cases for error handling
+{{#if LOW_EFFICACY}}
+- Test efficacy is below target. Focus on the surviving mutants in critical paths first.
+- Strengthen assertions: every test should fail if the function under test computes a different value.
 {{/if}}
 
-{{#if boundary_survivors}}
-4. **Boundary testing needed**: {{BOUNDARY_COUNT}} boundary mutations survived
-   - Add tests for exact threshold values
-   - Test both sides of comparisons (< vs <=, > vs >=)
+{{#if BOUNDARY_SURVIVORS}}
+- {{BOUNDARY_SURVIVORS}} `conditionals-boundary` mutants survived. Add tests at exact threshold values (`<` vs `<=`, `>` vs `>=`).
 {{/if}}
 
-{{#if logical_survivors}}
-5. **Logical operator coverage**: {{LOGICAL_COUNT}} logical mutations survived
-   - Add truth table tests for complex conditions
-   - Test all combinations of boolean conditions
+{{#if LOGICAL_SURVIVORS}}
+- {{LOGICAL_SURVIVORS}} `invert-logical` mutants survived. Add truth-table tests that exercise each `&&`/`||` operand independently.
 {{/if}}
 
-{{#if arithmetic_survivors}}
-6. **Arithmetic validation**: {{ARITHMETIC_COUNT}} arithmetic mutations survived
-   - Verify calculation results with specific values
-   - Test overflow/underflow scenarios
+{{#if ARITH_SURVIVORS}}
+- {{ARITH_SURVIVORS}} `arithmetic-base` mutants survived. Tests are calling functions but not asserting on the computed result.
 {{/if}}
 
-### Long-Term Improvements
+### Long-term
 
-- Consider property-based testing for key functions
-- Add fuzz tests for input validation
-- Review test assertions to ensure they verify behavior
-- Run mutation testing regularly in CI/CD
-
----
-
-## Detailed Results
-
-{{#if show_all_results}}
-### All Mutations
-
-{{#each all_results}}
-#### {{MUTATION_ID}}: {{DESCRIPTION}}
-
-- **File**: {{FILE}}:{{LINE}}
-- **Type**: {{TYPE}}
-- **Status**: {{STATUS}}
-- **Duration**: {{DURATION}}ms
-
-{{#if test_output}}
-<details>
-<summary>Test Output</summary>
-
-```
-{{TEST_OUTPUT}}
-```
-</details>
-{{/if}}
-
----
-
-{{/each}}
-{{/if}}
+- Add property-based tests (`rapid`) for invariants like commutativity, idempotence, roundtrip.
+- Wire a `threshold` gate into CI to prevent regressions.
+- Review surviving mutants periodically — equivalent mutants accumulate.
 
 ---
 
 ## Configuration
 
-- Test timeout: {{TIMEOUT}} seconds
-- Test package: {{PACKAGE}}
-- Parallel executions: {{PARALLEL}}
-- Mutation tool: go/ast based custom mutator
+```yaml
+{{CONFIG_DUMP}}
+```
 
 ---
 
 ## Next Steps
 
-1. Review surviving mutants and determine if they are equivalent
-2. Add targeted tests to kill high-priority survivors
-3. Re-run mutation testing to verify improvements
-4. Update test suite to maintain {{TARGET_SCORE}}% mutation score
+1. Triage `LIVED` mutants: real gap, equivalent mutant, or false positive.
+2. Add or strengthen tests for real gaps.
+3. Re-run gremlins on the same scope to confirm killed.
+4. Update `EQUIVALENT_MUTANTS.md` for documented equivalents.
+5. Set or update threshold in `.gremlins.yaml`.
 
 ---
 
-Generated by mutation-tester agent | [View Mutation Operators Reference]({{MUTATION_OPERATORS_LINK}})
+Generated from gremlins JSON at `{{INPUT_PATH}}`. See [`SKILL.md`](../SKILL.md) and [`references/best_practices.md`](../references/best_practices.md).

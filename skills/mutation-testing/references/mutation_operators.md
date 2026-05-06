@@ -1,631 +1,289 @@
-# Mutation Operators Reference
+# Gremlins Mutator Catalog
 
-This document catalogs all mutation operators used for Go code mutation testing. Each operator is defined with examples, AST node types, and rationale.
+This document maps each gremlins mutator to the Go operators it targets, with examples and guidance on when to enable.
 
-## Operator Categories
+For configuration syntax, see [gremlins.dev/0.5/usage/configuration](https://gremlins.dev/0.5/usage/configuration/).
 
-1. [Arithmetic Operators](#arithmetic-operators)
-2. [Relational Operators](#relational-operators)
-3. [Logical Operators](#logical-operators)
-4. [Unary Operators](#unary-operators)
-5. [Assignment Operators](#assignment-operators)
-6. [Statement Mutations](#statement-mutations)
-7. [Constant Mutations](#constant-mutations)
-8. [Boundary Mutations](#boundary-mutations)
-9. [Function Call Mutations](#function-call-mutations)
-10. [Control Flow Mutations](#control-flow-mutations)
+## Why Mutate?
 
----
+A mutation is a small, syntactically valid change to production code that should — if the tests are doing their job — cause at least one test to fail. If no test fails, either the test suite has no assertion that depends on this code's behavior, or the change is semantically equivalent to the original.
 
-## Arithmetic Operators
+Mutation testing is the empirical answer to "did the test actually verify anything?" — line and branch coverage cannot answer this.
 
-**AST Node**: `ast.BinaryExpr` with arithmetic `token.Token`
+## Mutator Reference
 
-### Addition ↔ Subtraction
+### Default-On Mutators
+
+These run by default. Disable only with strong justification.
+
+#### `arithmetic-base`
+
+Swaps among `+`, `-`, `*`, `/`, `%`.
 
 ```go
 // Original
-result := a + b
+fee := amount * rate / 10000
 
-// Mutations
-result := a - b  // Addition to subtraction
-result := a * b  // Addition to multiplication
-result := a / b  // Addition to division
+// Mutants
+fee := amount + rate / 10000   // * → +
+fee := amount - rate / 10000   // * → -
+fee := amount / rate / 10000   // * → /
+fee := amount * rate * 10000   // / → *
 ```
 
-**Rationale**: Tests should verify correct arithmetic operations, especially in financial calculations.
+**Catches**: incorrect arithmetic in fee calculations, scaling, indexing.
+**Recommended**: always on. Especially critical in financial code.
 
-### Multiplication ↔ Division
+#### `conditionals-boundary`
+
+Boundary changes: `<` ↔ `<=`, `>` ↔ `>=`.
 
 ```go
 // Original
-fee := amount * rate
+if balance >= threshold { ... }
 
-// Mutations
-fee := amount / rate  // Multiplication to division
-fee := amount + rate  // Multiplication to addition
-fee := amount - rate  // Multiplication to subtraction
+// Mutant
+if balance > threshold { ... }   // off-by-one at exact threshold
 ```
 
-**Rationale**: Critical for fee calculations, scaling operations, and mathematical computations.
+**Catches**: off-by-one bugs at thresholds. Tests must hit the exact boundary value to kill.
+**Recommended**: always on.
 
-### Modulo Operator
+#### `conditionals-negation`
+
+Negates conditions and equality: `==` ↔ `!=`, boolean conditions inverted.
 
 ```go
 // Original
-index := value % size
+if err != nil { return err }
 
-// Mutations
-index := value / size  // Modulo to division
-index := value * size  // Modulo to multiplication
+// Mutant
+if err == nil { return err }
 ```
 
-**Rationale**: Tests boundary conditions in array indexing and cyclic operations.
+**Catches**: tests that don't exercise both branches, or that have no assertion on the branch result.
+**Recommended**: always on.
 
----
+#### `increment-decrement`
 
-## Relational Operators
-
-**AST Node**: `ast.BinaryExpr` with comparison `token.Token`
-
-### Greater Than / Less Than
-
-```go
-// Original
-if balance > threshold {
-
-// Mutations
-if balance >= threshold {  // Boundary mutation
-if balance < threshold {   // Relational inversion
-if balance <= threshold {  // Inverted boundary
-if balance == threshold {  // Exact match
-if balance != threshold {  // Inequality
-```
-
-**Rationale**: Exposes boundary condition bugs and off-by-one errors.
-
-### Equality Operators
-
-```go
-// Original
-if status == Active {
-
-// Mutations
-if status != Active {  // Equality to inequality
-if status > Active {   // If comparable type
-if status < Active {   // If comparable type
-```
-
-**Rationale**: Tests that code correctly handles equality and inequality.
-
----
-
-## Logical Operators
-
-**AST Node**: `ast.BinaryExpr` with logical `token.Token`
-
-### AND ↔ OR
-
-```go
-// Original
-if authenticated && authorized {
-
-// Mutations
-if authenticated || authorized {  // AND to OR (security critical!)
-if authenticated {                // Remove second condition
-if authorized {                   // Remove first condition
-```
-
-**Rationale**: Critical for security checks, access control, and complex conditionals.
-
-### Negation
-
-```go
-// Original
-if !isEmpty {
-
-// Mutations
-if isEmpty {  // Remove negation
-```
-
-**Rationale**: Tests that boolean logic is correctly implemented.
-
----
-
-## Unary Operators
-
-**AST Node**: `ast.UnaryExpr`
-
-### Increment / Decrement
+`++` ↔ `--`, `+= 1` ↔ `-= 1` patterns.
 
 ```go
 // Original
 counter++
 
-// Mutations
-counter--      // Increment to decrement
-counter += 2   // Wrong increment amount
-// (no mutation) // Statement removal
+// Mutant
+counter--
 ```
 
-**Rationale**: Tests loop termination conditions and counter logic.
+**Catches**: loop termination bugs, counter direction errors.
+**Recommended**: always on.
 
-### Unary Plus / Minus
+#### `invert-negatives`
+
+Removes or adds unary negation: `-x` ↔ `+x` (or just `x`).
 
 ```go
 // Original
-value := -amount
+balance := -amount
 
-// Mutations
-value := +amount  // Negation removal
-value := amount   // Unary operator removal
+// Mutant
+balance := amount
 ```
 
-**Rationale**: Tests sign handling in mathematical operations.
+**Catches**: sign-handling bugs.
+**Recommended**: always on.
 
----
+### Default-Off Mutators
 
-## Assignment Operators
+These are aggressive — enable for critical packages, leave off for trivial code.
 
-**AST Node**: `ast.AssignStmt`
+#### `invert-assignments`
 
-### Compound Assignment
+Swaps compound-assignment operators: `+=` ↔ `-=`, `*=` ↔ `/=`, etc.
 
 ```go
 // Original
 balance += deposit
 
-// Mutations
-balance -= deposit  // += to -=
-balance *= deposit  // += to *=
-balance = deposit   // += to =
+// Mutant
+balance -= deposit
 ```
 
-**Rationale**: Tests that state updates are correctly implemented.
+**Catches**: tests that don't assert on the post-assignment state.
+**Recommended**: enable for state-mutating code (wallets, accumulators, counters).
 
-### Assignment Order
+#### `invert-bitwise`
+
+Swaps `&` ↔ `|`, `^` mutations.
 
 ```go
 // Original
-a, b = b, a  // Swap
+flags := flagA | flagB
 
-// Mutations
-a, b = a, b  // No swap
-b, a = b, a  // Reverse order
+// Mutant
+flags := flagA & flagB
 ```
 
-**Rationale**: Tests tuple assignments and swap operations.
+**Catches**: bitmap / flag mask bugs.
+**Recommended**: enable for protocol code (Bitcoin script, P2P feature bits, BOLT feature flags).
 
----
+#### `invert-bwassign`
 
-## Statement Mutations
-
-**AST Node**: Various statement types
-
-### Return Statement Removal
+Bitwise compound-assign swaps: `&=` ↔ `|=`, `^=`.
 
 ```go
 // Original
-func Validate() error {
-    if invalid {
-        return ErrInvalid
+state |= READY
+
+// Mutant
+state &= READY
+```
+
+**Catches**: state flag manipulation bugs.
+**Recommended**: enable for state-machine code.
+
+#### `invert-logical`
+
+`&&` ↔ `||`. **Security-critical** — security checks frequently rely on `&&`.
+
+```go
+// Original
+if user.IsAuthenticated() && user.IsAuthorized(resource) { ... }
+
+// Mutant
+if user.IsAuthenticated() || user.IsAuthorized(resource) { ... }
+//   ^ now any authenticated user is "authorized"
+```
+
+**Catches**: auth-bypass-class bugs, missing test cases that exercise individual conjuncts.
+**Recommended**: **always enable for security-touching code**. Often catches the most consequential test gaps.
+
+#### `invert-loopctrl`
+
+`break` ↔ `continue` in loops.
+
+```go
+// Original
+for _, peer := range peers {
+    if peer.Banned {
+        continue
     }
-    return nil
+    process(peer)
 }
 
-// Mutations
-func Validate() error {
-    if invalid {
-        // (removed return)
+// Mutant
+for _, peer := range peers {
+    if peer.Banned {
+        break   // stops processing on first banned peer
     }
-    return nil
+    process(peer)
 }
 ```
 
-**Rationale**: Tests that early returns are necessary and tested.
+**Catches**: loop control flow bugs.
+**Recommended**: enable for code processing collections of independent items.
 
-### Return Value Mutation
+#### `remove-self-assignments`
 
-```go
-// Original
-return true
-
-// Mutations
-return false   // Boolean flip
-return !value  // If returning variable
-```
-
-**Rationale**: Tests that callers check return values correctly.
-
-### Defer Statement Removal
+Removes `x op= y` style updates entirely.
 
 ```go
 // Original
-defer mu.Unlock()
+total += line.Amount
 
-// Mutations
-// (removed defer)
-mu.Unlock()  // Immediate call instead of defer
+// Mutant
+// (assignment removed)
 ```
 
-**Rationale**: Tests that defer timing is important and tested.
+**Catches**: tests that don't assert on the accumulated/updated value.
+**Recommended**: enable for accumulators and state machines.
 
----
+## Mutator Enablement Recipes
 
-## Constant Mutations
+### Default profile (most code)
 
-**AST Node**: `ast.BasicLit`, `ast.Ident` (for predeclared constants)
+```yaml
+mutants:
+  arithmetic-base:       { enabled: true }
+  conditionals-boundary: { enabled: true }
+  conditionals-negation: { enabled: true }
+  increment-decrement:   { enabled: true }
+  invert-negatives:      { enabled: true }
+```
 
-### Numeric Constants
+### Critical-path profile (consensus, wallet, channel, crypto)
+
+Enable everything:
+
+```yaml
+mutants:
+  arithmetic-base:         { enabled: true }
+  conditionals-boundary:   { enabled: true }
+  conditionals-negation:   { enabled: true }
+  increment-decrement:     { enabled: true }
+  invert-negatives:        { enabled: true }
+  invert-assignments:      { enabled: true }
+  invert-bitwise:          { enabled: true }
+  invert-bwassign:         { enabled: true }
+  invert-logical:          { enabled: true }
+  invert-loopctrl:         { enabled: true }
+  remove-self-assignments: { enabled: true }
+```
+
+### Security-touching code
+
+At minimum enable `invert-logical` on top of defaults — it's the highest-value mutator for catching auth/authorization test gaps.
+
+```yaml
+mutants:
+  arithmetic-base:       { enabled: true }
+  conditionals-boundary: { enabled: true }
+  conditionals-negation: { enabled: true }
+  increment-decrement:   { enabled: true }
+  invert-negatives:      { enabled: true }
+  invert-logical:        { enabled: true }
+```
+
+## Mapping `LIVED` Survivors to Test Improvements
+
+When a mutator survives, the implied missing test depends on which mutator:
+
+| Survivor | Implied test gap |
+|---|---|
+| `arithmetic-base` | No assertion on calculated result |
+| `conditionals-boundary` | No test at exact threshold |
+| `conditionals-negation` | Branch executed but result not asserted |
+| `increment-decrement` | Loop count or counter not verified |
+| `invert-negatives` | Sign of result not asserted |
+| `invert-assignments` | Post-update state not read back |
+| `invert-bitwise` | Resulting flags not checked |
+| `invert-bwassign` | State machine transition not verified |
+| `invert-logical` | Need test that exercises each conjunct independently |
+| `invert-loopctrl` | Order/completeness of iteration not verified |
+| `remove-self-assignments` | Accumulated value not asserted |
+
+This mapping is what `test-refine` consumes when it cross-references mutation survivors with AST-detected smells.
+
+## Equivalent Mutants
+
+Not every `LIVED` mutant is a real test gap. Equivalent mutants change syntax but not observable behavior. Common cases:
 
 ```go
-// Original
-const MaxRetries = 3
+// Original: a + b + c
+// Mutated:  a + (b + c)   ← associativity; equivalent for ints
 
-// Mutations
-const MaxRetries = 0
-const MaxRetries = 1
-const MaxRetries = 4  // Off-by-one
+// Original: x = a; x = b
+// Mutated:  x = a + 1; x = b   ← first assignment dead
+
+// Original: if alwaysTrue { ... }
+// Mutated:  if !alwaysTrue { ... }   ← if alwaysTrue is unreachable mutation, equivalent
 ```
 
-**Rationale**: Tests that specific constant values matter.
-
-### Boolean Constants
-
-```go
-// Original
-enabled := true
-
-// Mutations
-enabled := false  // Boolean flip
-```
-
-**Rationale**: Tests that boolean flags are checked.
-
-### Nil Mutations
-
-```go
-// Original
-if err != nil {
-
-// Mutations
-if err == nil {  // Nil check inversion
-```
-
-**Rationale**: Tests error handling correctness.
-
-### String Constants
-
-```go
-// Original
-const Prefix = "BTC"
-
-// Mutations
-const Prefix = ""     // Empty string
-const Prefix = "XXX"  // Different value
-```
-
-**Rationale**: Tests that string values are validated.
-
----
-
-## Boundary Mutations
-
-**AST Node**: Varies based on context
-
-### Array/Slice Boundaries
-
-```go
-// Original
-for i := 0; i < len(items); i++ {
-
-// Mutations
-for i := 0; i <= len(items); i++ {  // Off-by-one (will panic)
-for i := 1; i < len(items); i++ {   // Skip first element
-for i := 0; i < len(items)-1; i++ { // Skip last element
-```
-
-**Rationale**: Tests boundary condition handling and off-by-one errors.
-
-### Range Conditions
-
-```go
-// Original
-if value >= min && value <= max {
-
-// Mutations
-if value > min && value <= max {   // Exclude lower bound
-if value >= min && value < max {   // Exclude upper bound
-if value > min && value < max {    // Exclude both bounds
-```
-
-**Rationale**: Tests inclusive vs exclusive ranges.
-
----
-
-## Function Call Mutations
-
-**AST Node**: `ast.CallExpr`
-
-### Argument Swap
-
-```go
-// Original
-Transfer(from, to, amount)
-
-// Mutations
-Transfer(to, from, amount)  // Swap first two
-Transfer(from, amount, to)  // Swap last two
-```
-
-**Rationale**: Tests that argument order matters and is validated.
-
-### Argument Value Mutation
-
-```go
-// Original
-Retry(maxAttempts, timeout)
-
-// Mutations
-Retry(0, timeout)           // Zero first arg
-Retry(maxAttempts, 0)       // Zero second arg
-Retry(maxAttempts+1, timeout) // Off-by-one
-```
-
-**Rationale**: Tests that specific argument values are meaningful.
-
-### Function Call Removal
-
-```go
-// Original
-err := Validate(input)
-if err != nil {
-    return err
-}
-
-// Mutations
-// (removed Validate call)
-var err error
-if err != nil {
-    return err
-}
-```
-
-**Rationale**: Tests that function calls have side effects that matter.
-
----
-
-## Control Flow Mutations
-
-**AST Node**: `ast.IfStmt`, `ast.ForStmt`, `ast.SwitchStmt`
-
-### If Condition Inversion
-
-```go
-// Original
-if condition {
-    doSomething()
-}
-
-// Mutations
-if !condition {
-    doSomething()
-}
-```
-
-**Rationale**: Tests that condition polarity is correct.
-
-### Else Branch Removal
-
-```go
-// Original
-if valid {
-    process()
-} else {
-    handleError()
-}
-
-// Mutations
-if valid {
-    process()
-}
-// (removed else)
-```
-
-**Rationale**: Tests that else branch is necessary.
-
-### Break/Continue Removal
-
-```go
-// Original
-for _, item := range items {
-    if item == target {
-        break
-    }
-}
-
-// Mutations
-for _, item := range items {
-    if item == target {
-        continue  // Break to continue
-    }
-}
-
-// Or
-for _, item := range items {
-    if item == target {
-        // (removed break)
-    }
-}
-```
-
-**Rationale**: Tests loop termination logic.
-
-### Switch Case Fallthrough
-
-```go
-// Original
-switch status {
-case Active:
-    start()
-case Inactive:
-    stop()
-}
-
-// Mutations
-switch status {
-case Active:
-    start()
-    fallthrough  // Add fallthrough
-case Inactive:
-    stop()
-}
-```
-
-**Rationale**: Tests that cases are independent.
-
----
-
-## Go-Specific Mutations
-
-### Channel Operations
-
-```go
-// Original
-ch <- value
-
-// Mutations
-<-ch           // Send to receive
-value := <-ch  // Assign received value
-```
-
-**Rationale**: Tests channel direction and usage.
-
-### Goroutine
-
-```go
-// Original
-go process()
-
-// Mutations
-process()  // Remove go keyword (synchronous)
-```
-
-**Rationale**: Tests that concurrency is necessary.
-
-### Select Statement
-
-```go
-// Original
-select {
-case <-done:
-    return
-case result := <-ch:
-    process(result)
-}
-
-// Mutations
-select {
-case <-done:
-    // (removed return)
-case result := <-ch:
-    process(result)
-}
-```
-
-**Rationale**: Tests select case handling.
-
----
-
-## Mutation Priority
-
-Not all mutations are equally valuable. Prioritize mutations based on code importance:
-
-### High Priority (Always Generate)
-- Relational operators in conditionals (boundary bugs)
-- Arithmetic in financial calculations (money bugs)
-- Logical operators in security checks (auth bugs)
-- Nil checks (panic prevention)
-- Array bounds (panic prevention)
-
-### Medium Priority (Generate for Non-Trivial Code)
-- Function argument swaps
-- Return value mutations
-- Assignment operator changes
-- Constant value changes
-
-### Low Priority (Generate Selectively)
-- String constant changes (unless validation critical)
-- Unary operator changes (unless sign matters)
-- Statement removal (unless side effects obvious)
-
----
-
-## Equivalent Mutant Detection
-
-Some mutations don't change observable behavior. Detect and skip these:
-
-### Common Equivalent Mutants
-
-```go
-// Example 1: Unused intermediate value
-result := a + b  // Mutation: a - b
-result = c       // Immediate reassignment (equivalent)
-
-// Example 2: Post-increment vs pre-increment
-arr[i++]  // vs arr[++i] (not equivalent in Go, but similar)
-// In standalone statement: i++ vs ++i (would be equivalent if Go supported both)
-
-// Example 3: Associative operations
-if a || b || c {  // Mutations may be equivalent due to short-circuit
-```
-
-**Strategy**: Track variable liveness and data flow to identify equivalent mutants automatically.
-
----
-
-## Implementation Notes
-
-### AST Node Type Mapping
-
-```go
-// Arithmetic: ast.BinaryExpr + token.ADD, token.SUB, etc.
-// Relational: ast.BinaryExpr + token.LSS, token.GTR, etc.
-// Logical: ast.BinaryExpr + token.LAND, token.LOR
-// Unary: ast.UnaryExpr
-// Assignment: ast.AssignStmt
-// Calls: ast.CallExpr
-// Return: ast.ReturnStmt
-// If: ast.IfStmt
-// For: ast.ForStmt, ast.RangeStmt
-```
-
-### Mutation Generation Strategy
-
-1. Walk AST with `ast.Inspect()`
-2. For each node, check if mutation operator applies
-3. Generate all applicable mutations for that node
-4. Store mutation descriptors with:
-   - File path
-   - Line and column number
-   - Original code (for reporting)
-   - Mutated code
-   - Mutation type
-   - Priority level
-
-### Type Safety
-
-Mutations must respect Go's type system:
-- Don't mutate `+` to `/` if operands are strings
-- Don't mutate `>` to `>=` if operands are non-comparable types
-- Don't swap arguments if types differ
-
-Use `go/types` package for type checking during mutation generation.
-
----
+Document equivalents in the project to avoid re-investigating them. Gremlins does not filter equivalents automatically.
 
 ## Further Reading
 
-- "PITest: Industrial-Grade Mutation Testing for Java" (Coles et al.)
-- "Are Mutants a Valid Substitute for Real Faults in Software Testing?" (Just et al.)
-- "An Analysis and Survey of the Development of Mutation Testing" (Jia & Harman)
+- [Gremlins documentation](https://gremlins.dev/) — authoritative reference.
+- [PITest](https://pitest.org/) — Java mutation tool that inspired gremlins; its docs cover mutator semantics in depth.
+- "Are Mutants a Valid Substitute for Real Faults in Software Testing?" (Just et al., FSE 2014) — empirical justification.

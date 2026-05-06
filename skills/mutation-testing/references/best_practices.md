@@ -1,16 +1,16 @@
 # Mutation Testing Best Practices
 
-This guide provides advanced patterns and best practices for effective mutation testing in Go projects.
+Patterns for using gremlins effectively on Go projects, with emphasis on Bitcoin/Lightning and other mission-critical code.
 
 ## Table of Contents
 
 1. [Scoping Mutations](#scoping-mutations)
-2. [Performance Optimization](#performance-optimization)
-3. [Test Generation Strategies](#test-generation-strategies)
-4. [Handling Equivalent Mutants](#handling-equivalent-mutants)
+2. [Performance](#performance)
+3. [Reading Survivors](#reading-survivors)
+4. [Equivalent Mutants](#equivalent-mutants)
 5. [CI/CD Integration](#cicd-integration)
-6. [Interpreting Results](#interpreting-results)
-7. [Mission-Critical Code Patterns](#mission-critical-code-patterns)
+6. [Mission-Critical Patterns](#mission-critical-patterns)
+7. [Gremlins-Specific Gotchas](#gremlins-specific-gotchas)
 8. [Common Pitfalls](#common-pitfalls)
 
 ---
@@ -19,303 +19,165 @@ This guide provides advanced patterns and best practices for effective mutation 
 
 ### Start Narrow
 
-Don't mutation test your entire codebase at once. Focus on high-value areas first.
+Don't run gremlins on the entire codebase at once. Per the upstream README, gremlins is built for *smallish* Go modules; runs on large monorepos can take hours.
 
-**Recommended prioritization**:
+**Recommended ordering**:
 
-1. **Mission-critical code**: Financial calculations, security checks, consensus logic
-2. **Complex business logic**: State machines, workflow engines, algorithms
-3. **Bug-prone areas**: Code with history of defects
-4. **Recently changed code**: New features and bug fixes
-5. **Public API surfaces**: External contracts that can't change
+1. **Mission-critical code**: consensus, channel state, payment, crypto, signing.
+2. **Complex business logic**: state machines, fee estimators, routing.
+3. **Bug-prone areas**: code with a history of post-merge fixes.
+4. **Recently changed code**: PR-scoped runs.
+5. **Public API surfaces**: external contracts.
 
 **Skip mutation testing for**:
-- Generated code (protobuf, mocks)
-- Simple getters/setters with no logic
-- Obvious delegation code
-- Test helpers (testing test code is usually low value)
 
-### File and Package Selection
+- Generated code (protobuf, mocks, gRPC stubs).
+- Pure delegation / pass-through code.
+- Test helpers — testing test code is rarely worthwhile.
+- Trivial getters/setters.
+
+### Per-Package Invocation
+
+Always prefer per-package runs over `./...`:
 
 ```bash
-# Mutation test only changed files (for PR reviews)
-git diff --name-only main | grep '\.go$' | grep -v '_test\.go$'
-
-# Mutation test specific critical packages
-./scripts/generate_mutations.go --package ./internal/consensus
-./scripts/generate_mutations.go --package ./internal/wallet
-
-# Mutation test files matching pattern
-./scripts/generate_mutations.go --pattern '**/validation*.go'
+~/.claude/skills/mutation-testing/scripts/unleash.sh \
+    --pkg ./internal/wallet \
+    --output .reviews/mutations/wallet.json
 ```
 
-### Line and Function Filtering
+### Diff-Scoped Runs
 
-For large files, focus on specific functions:
-
-```bash
-# Mutation test specific function
-./scripts/generate_mutations.go --file wallet.go --function CalculateFee
-
-# Mutation test specific line range
-./scripts/generate_mutations.go --file wallet.go --lines 100-200
-```
-
----
-
-## Performance Optimization
-
-### Parallel Execution
-
-Run independent mutations concurrently:
+For PR-time runs, scope to changed packages:
 
 ```bash
-# Generate mutations
-./scripts/generate_mutations.go --file wallet.go --output mutations.json
+# Find packages with changed Go files (not test files).
+changed_pkgs=$(git diff --name-only origin/main...HEAD \
+    | grep '\.go$' | grep -v '_test\.go$' \
+    | xargs -I{} dirname {} | sort -u)
 
-# Run mutations in parallel (example using xargs)
-jq -r 'to_entries | .[] | "\(.key)"' mutations.json | \
-  xargs -P 8 -I {} ./scripts/run_mutation_test.go --mutation mutations.json:{} --package ./internal/wallet
-```
-
-**Guideline**: Use number of CPU cores minus 1 for parallelism to avoid overwhelming the system.
-
-### Test Selection
-
-Only run tests that cover the mutated code:
-
-```bash
-# Use go test's coverage to identify relevant tests
-go test -coverprofile=coverage.out ./...
-go tool cover -func=coverage.out | grep wallet.go
-
-# Run only tests that cover wallet.go
-go test -run TestWallet ./...
-```
-
-**Strategy**: Maintain a mapping of source files to test files. Use `go list` and build tags to determine test dependencies.
-
-### Incremental Mutation Testing
-
-For CI/CD, only test changed code:
-
-```bash
-# Get changed files from git
-CHANGED_FILES=$(git diff --name-only origin/main...HEAD | grep '\.go$' | grep -v '_test\.go$')
-
-# Generate mutations only for changed files
-for file in $CHANGED_FILES; do
-  ./scripts/generate_mutations.go --file "$file" --output "mutations_$(basename "$file").json"
+for pkg in $changed_pkgs; do
+    ~/.claude/skills/mutation-testing/scripts/unleash.sh \
+        --pkg "./$pkg" \
+        --silent \
+        --output ".reviews/mutations/$(echo "$pkg" | tr / _).json"
 done
 ```
 
-### Caching
+---
 
-Cache mutation results to avoid re-running unchanged code:
+## Performance
+
+### Workers and CPU Pinning
+
+```yaml
+unleash:
+  workers: 0      # 0 = all CPUs; lower if memory-bound
+  test-cpu: 0     # 0 = no constraint per test process
+  timeout-coefficient: 0  # 0 = default; raise for slow tests
+```
+
+Multiply `workers × test-cpu` to estimate peak CPU usage. On a 16-core machine with `workers=8` and `test-cpu=2`, you'll saturate the box.
+
+### Dry-Run First
+
+Before a long run, preview the mutant count:
 
 ```bash
-# Cache key: hash of (source file + test files + mutation descriptor)
-# If all three are unchanged, reuse previous result
-
-# Example cache structure:
-# .mutation_cache/
-#   wallet.go-abc123-M1.json  (cached result)
-#   wallet.go-abc123-M2.json
+gremlins unleash --dry-run --pkg ./internal/wallet
 ```
+
+If the count is unreasonable (tens of thousands), narrow the scope or disable aggressive mutators.
+
+### Test Timeout Coefficient
+
+Gremlins applies a multiplier to the original test runtime as the per-mutant timeout. If your tests have legitimate long-running scenarios, raise `timeout-coefficient`. If they hang on infinite loops introduced by mutation, lower it.
 
 ---
 
-## Test Generation Strategies
+## Reading Survivors
 
-### Analyze Why Mutants Survive
+For each `LIVED` mutant, the test gap falls into one of three categories:
 
-For each surviving mutant, categorize the reason:
+### Category 1: Missing Test (uncovered behavior)
 
-**Category 1: Missing Test**
 ```go
-// Surviving mutant
-if balance > threshold {  // Original
-if balance >= threshold { // Mutant (survived)
+// Original
+if balance >= threshold { return ErrInsufficient }
 
-// Reason: No test for exact threshold value
-// Solution: Add boundary test
-func TestBalance_ExactThreshold(t *testing.T) {
-    result := CheckBalance(1000) // exact threshold
-    assert.Equal(t, expected, result)
+// Mutant: balance > threshold (LIVED)
+// Gap: no test at exact threshold value.
+```
+
+**Fix**: add a boundary test.
+
+```go
+func TestBalanceExactThreshold(t *testing.T) {
+    err := Check(threshold)         // exact value
+    require.ErrorIs(t, err, ErrInsufficient)
 }
 ```
 
-**Category 2: Weak Assertion**
-```go
-// Surviving mutant
-result := Calculate(a + b)  // Original
-result := Calculate(a - b)  // Mutant (survived)
+### Category 2: Weak Assertion (covered but not verified)
 
-// Existing test
+```go
+// Original
+result := Calculate(a + b)
+
+// Mutant: a - b (LIVED)
+// Gap: existing test calls Calculate but doesn't assert on result.
+```
+
+**Fix**: add the assertion.
+
+```go
 func TestCalculate(t *testing.T) {
-    Calculate(10, 5) // Runs but doesn't assert result!
-}
-
-// Solution: Add assertion
-func TestCalculate(t *testing.T) {
-    result := Calculate(10, 5)
-    assert.Equal(t, 15, result) // Now catches mutant
+    require.Equal(t, 15, Calculate(10, 5))   // now distinguishes a+b from a-b
 }
 ```
 
-**Category 3: Wrong Test Data**
+### Category 3: Wrong Test Data (test exists but uses values that hide the bug)
+
 ```go
-// Surviving mutant
-if amount < 0 {   // Original
-if amount <= 0 {  // Mutant (survived)
+// Original
+if amount < 0 { return ErrNegative }
 
-// Existing test
-func TestNegativeAmount(t *testing.T) {
-    result := Validate(-10) // Never tests zero
-    assert.Error(t, result)
-}
-
-// Solution: Add edge case
-func TestZeroAmount(t *testing.T) {
-    result := Validate(0)
-    assert.NoError(t, result) // Or Error, depending on requirements
-}
+// Mutant: amount <= 0 (LIVED)
+// Existing test uses amount = -10 — both original and mutant agree.
+// Gap: no test at amount = 0.
 ```
 
-### Systematic Test Generation
-
-For high-priority survivors, generate tests systematically:
+**Fix**: add the discriminating value.
 
 ```go
-// For boundary mutant: a > b → a >= b
-// Generate three tests:
-1. a < b (clearly one side)
-2. a == b (exact boundary)
-3. a > b (clearly other side)
-
-// For arithmetic mutant: a + b → a - b
-// Generate tests with:
-1. Positive operands
-2. Negative operands
-3. Mixed signs
-4. Zero values
-5. Expected result assertion
-
-// For logical mutant: a && b → a || b
-// Generate truth table tests:
-1. a=true, b=true
-2. a=true, b=false
-3. a=false, b=true
-4. a=false, b=false
-```
-
-### Property-Based Tests for Mutations
-
-Use property-based testing to kill mutants:
-
-```go
-// Original code
-func Add(a, b int) int {
-    return a + b
-}
-
-// Mutant: return a - b
-
-// Property-based test (using rapid)
-func TestAdd_Commutative(t *testing.T) {
-    rapid.Check(t, func(rt *rapid.T) {
-        a := rapid.Int().Draw(rt, "a")
-        b := rapid.Int().Draw(rt, "b")
-
-        // Commutative property
-        assert.Equal(t, Add(a, b), Add(b, a))
-
-        // This kills the mutant because:
-        // a + b == b + a (passes)
-        // a - b != b - a (fails, mutant killed)
-    })
+func TestZero(t *testing.T) {
+    require.NoError(t, Validate(0))   // distinguishes < 0 from <= 0
 }
 ```
 
 ---
 
-## Handling Equivalent Mutants
+## Equivalent Mutants
 
-Equivalent mutants don't change observable behavior and can't be killed by tests.
+Some `LIVED` mutants are semantically equivalent to the original — no test could kill them. Examples:
 
-### Common Equivalent Patterns
+- Mutated value overwritten before any read.
+- Mutation in unreachable code.
+- Associative operator swap with commutative operands.
 
-**1. Unused Variable Mutation**
-```go
-// Equivalent mutant
-temp := a + b  // Original: a + b
-temp := a - b  // Mutant: a - b
-result = c     // Reassignment makes mutation irrelevant
-```
+When you confirm equivalence:
 
-**2. Dead Code**
-```go
-if DEBUG {  // DEBUG is always false
-    log.Println("debug")  // Any mutation here is equivalent
-}
-```
+1. Add a comment near the mutation site explaining why.
+2. Optionally, maintain `EQUIVALENT_MUTANTS.md` at the repo root listing them.
+3. Manually subtract from the survivor count when interpreting results.
 
-**3. Associative Operations**
-```go
-// May be equivalent depending on values
-if a || b || c {  // vs  if a || c || b
-```
-
-### Detecting Equivalents
-
-**Strategy 1: Static Analysis**
-```go
-// Check if mutated variable is:
-// 1. Never read after mutation point
-// 2. Immediately overwritten
-// 3. In unreachable code
-```
-
-**Strategy 2: Multiple Test Runs**
-```go
-// Run tests multiple times with different random seeds
-// If mutant survives consistently, likely equivalent
-// If occasionally killed, timing/flaky test issue
-```
-
-**Strategy 3: Manual Review**
-```go
-// Mark mutants as equivalent after review
-// Store in .equivalent_mutants.json
-// Exclude from future runs
-```
-
-### Managing Equivalent Mutants
-
-Create an equivalents file:
-
-```json
-{
-  "wallet.go": {
-    "line_42_arithmetic": {
-      "reason": "Variable immediately reassigned",
-      "reviewed_by": "claude",
-      "reviewed_at": "2025-10-29"
-    }
-  }
-}
-```
-
-Exclude from mutation score calculation:
-```
-Mutation Score = killed / (total - timeouts - equivalents)
-```
+Gremlins does **not** filter equivalents automatically. Treat the raw `test_efficacy` as a lower bound on real efficacy.
 
 ---
 
 ## CI/CD Integration
 
-### Pull Request Workflow
+### Threshold-Gated PR Check
 
 ```yaml
 # .github/workflows/mutation-test.yml
@@ -323,358 +185,212 @@ name: Mutation Testing
 
 on:
   pull_request:
-    paths:
-      - '**.go'
-      - '!**_test.go'
+    paths: ['**.go', '!**_test.go']
 
 jobs:
   mutation-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Need full history for diff
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.22' }
 
-      - uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
+      - name: Install gremlins
+        run: ~/.claude/skills/mutation-testing/scripts/install-gremlins.sh
 
-      - name: Run mutation testing on changed files
+      - name: Run mutations on changed packages
         run: |
-          # Get changed Go files
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | \
-            grep '\.go$' | grep -v '_test\.go$')
-
-          # Run mutations
-          for file in $CHANGED_FILES; do
-            ~/.claude/skills/mutation-testing/scripts/generate_mutations.go \
-              --file "$file" --output "mutations_$file.json"
-
-            ~/.claude/skills/mutation-testing/scripts/run_mutation_test.go \
-              --mutation "mutations_$file.json" --package ./...
+          changed=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+            | grep '\.go$' | grep -v '_test\.go$' \
+            | xargs -I{} dirname {} | sort -u)
+          for pkg in $changed; do
+            ~/.claude/skills/mutation-testing/scripts/unleash.sh \
+                --pkg "./$pkg" \
+                --silent \
+                --config .gremlins.yaml \
+                --output ".reviews/mutations/$(echo "$pkg" | tr / _).json"
           done
 
-          # Parse results
-          ~/.claude/skills/mutation-testing/scripts/parse_results.go \
-            --results results/*.json --output mutation_report.json
-
-      - name: Check mutation score threshold
-        run: |
-          SCORE=$(jq -r '.mutation_score' mutation_report.json)
-          THRESHOLD=80
-
-          if (( $(echo "$SCORE < $THRESHOLD" | bc -l) )); then
-            echo "Mutation score $SCORE% is below threshold $THRESHOLD%"
-            exit 1
-          fi
-
       - name: Comment on PR
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const fs = require('fs');
-            const report = JSON.parse(fs.readFileSync('mutation_report.json'));
-
-            const body = `## Mutation Testing Report
-
-            **Mutation Score**: ${report.mutation_score}%
-            **Mutants Killed**: ${report.killed}/${report.total}
-
-            ${report.survivors.length > 0 ? '### Surviving Mutants\n' +
-              report.survivors.map(s => `- ${s.file}:${s.line} - ${s.description}`).join('\n')
-              : 'All mutants killed! 🎉'}
-            `;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body
-            });
+        run: |
+          for f in .reviews/mutations/*.json; do
+            ~/.claude/skills/mutation-testing/scripts/analyze-survivors.sh \
+                --input "$f" \
+                --output "${f%.json}.md"
+          done
+          # Concatenate and post as PR comment via gh CLI.
 ```
 
-### Quality Gates
+### Threshold Config
 
-Define mutation score thresholds based on code criticality:
+Use the built-in threshold gating to fail the job on regression:
 
 ```yaml
-# .mutation_config.yml
-quality_gates:
-  critical:
-    paths: ["internal/consensus", "internal/wallet"]
-    min_score: 90
-
-  important:
-    paths: ["internal/validation", "internal/protocol"]
-    min_score: 80
-
-  standard:
-    paths: ["**"]
-    min_score: 70
+# .gremlins.yaml
+unleash:
+  threshold:
+    efficacy: 85
+    mutant-coverage: 80
 ```
+
+Gremlins exits nonzero when either threshold is unmet.
 
 ---
 
-## Interpreting Results
+## Mission-Critical Patterns
 
-### Mutation Score Context
-
-Mutation score alone doesn't tell the full story. Consider:
-
-**High score (>90%) with few tests**: Tests might be overfitted to current implementation. Add property-based tests.
-
-**Medium score (70-80%) with many tests**: Tests likely cover main paths but miss edges. Focus on boundary tests.
-
-**Low score (<70%)**: Significant gaps. Tests may only verify happy paths without assertions.
-
-**100% score**: Either perfect tests or too few mutations. Verify mutation generation is thorough.
-
-### Mutation Type Analysis
-
-Track which mutation types survive most:
-
-```
-Boundary mutations: 20% survival → Need more edge case tests
-Arithmetic mutations: 5% survival → Good coverage of calculations
-Logical mutations: 40% survival → Weak conditional testing
-Statement removal: 15% survival → Some dead code or weak tests
-```
-
-**Action items**:
-- High boundary survival → Add boundary value tests
-- High logical survival → Add truth table tests
-- High arithmetic survival → Add calculation verification tests
-- High statement removal survival → Remove dead code or add effect tests
-
-### Trend Analysis
-
-Track mutation scores over time:
-
-```
-PR #123: 75% → 82% (+7%) ✅ Improvement
-PR #124: 82% → 79% (-3%) ⚠️ Regression
-PR #125: 79% → 91% (+12%) ✅ Strong improvement
-```
-
-**Set up alerts**:
-- Regression > 5%: Block merge
-- Regression 2-5%: Warning
-- Regression < 2%: Accept (noise)
-
----
-
-## Mission-Critical Code Patterns
-
-For Bitcoin/Lightning and other mission-critical systems:
-
-### Financial Calculation Testing
+### Financial Calculations
 
 ```go
-// Code
 func CalculateFee(amount, rate int64) int64 {
     return (amount * rate) / 10000
 }
+```
 
-// Mutation testing must catch:
-// 1. Arithmetic errors: * → /, + → -, etc.
-// 2. Overflow/underflow: Use extreme values
-// 3. Precision loss: Division order changes
-// 4. Off-by-one in denominator: 10000 → 10001
+Required mutators: `arithmetic-base`, `conditionals-boundary`, `invert-negatives`.
 
-// Required tests:
-func TestCalculateFee_Precision(t *testing.T) {
-    // Test precision at boundaries
-    assert.Equal(t, 1, CalculateFee(10000, 1))
-    assert.Equal(t, 0, CalculateFee(9999, 1))
+Required tests:
+
+```go
+func TestCalculateFeePrecision(t *testing.T) {
+    require.Equal(t, int64(1), CalculateFee(10000, 1))
+    require.Equal(t, int64(0), CalculateFee(9999, 1))   // boundary
 }
 
-func TestCalculateFee_Overflow(t *testing.T) {
-    // Test large values
-    large := int64(1<<62)
-    result := CalculateFee(large, 1)
-    assert.True(t, result > 0, "Overflow should not occur")
+func TestCalculateFeeOverflow(t *testing.T) {
+    require.NotPanics(t, func() {
+        _ = CalculateFee(math.MaxInt64, 1)
+    })
 }
 ```
 
-### Security Check Testing
+### Authorization Checks
 
 ```go
-// Code
-func Authorize(user User, resource Resource) bool {
-    return user.IsAdmin() && resource.AllowsUser(user)
-}
-
-// Critical mutations:
-// && → || (SECURITY BUG!)
-// Tests MUST catch this
-
-// Required test:
-func TestAuthorize_BothConditionsRequired(t *testing.T) {
-    user := &User{admin: false}
-    resource := &Resource{allowed: []User{user}}
-
-    // Should fail because not admin
-    assert.False(t, Authorize(user, resource))
-
-    // This test kills the && → || mutant
+func Authorize(u *User, r *Resource) bool {
+    return u.IsAdmin() && r.AllowsUser(u)
 }
 ```
 
-### State Machine Testing
+Required mutator: **`invert-logical`** — without it, `&& → ||` (an auth-bypass) won't be tested.
+
+Required tests:
 
 ```go
-// Code
-type State int
-const (
-    Init State = iota
-    Running
-    Stopped
-)
-
-func Transition(current State, event Event) (State, error) {
-    switch current {
-    case Init:
-        if event == Start {
-            return Running, nil
-        }
-    case Running:
-        if event == Stop {
-            return Stopped, nil
-        }
+func TestAuthorize(t *testing.T) {
+    cases := []struct {
+        admin, allowed, want bool
+    }{
+        {false, false, false},
+        {false, true, false},   // distinguishes && from ||
+        {true,  false, false},  // distinguishes && from ||
+        {true,  true,  true},
     }
-    return current, ErrInvalidTransition
+    for _, c := range cases {
+        u := &User{admin: c.admin}
+        r := &Resource{allowed: c.allowed}
+        require.Equal(t, c.want, Authorize(u, r))
+    }
 }
-
-// Mutations to catch:
-// 1. Wrong next state
-// 2. Missing error return
-// 3. Wrong event check
-
-// Required: Test all valid and invalid transitions
 ```
+
+### State Machine Transitions
+
+Enable `invert-bitwise`, `invert-bwassign`, `remove-self-assignments`, and `invert-logical`. Test every valid transition and at least one invalid transition per state.
+
+### Bitcoin/Lightning Specific
+
+| Module | Mutators to enable | Why |
+|---|---|---|
+| Channel state machine | all | Money + state flags + transitions |
+| HTLC routing | all | Money + control flow |
+| Commitment tx construction | all | Money + bitwise (script flags) |
+| BOLT11 invoice parsing | all | Parser correctness |
+| Wire encoding | all + run with `invert-bitwise` | Byte-level correctness |
+| Fee estimation | defaults + `invert-assignments` | Arithmetic dominates |
+| Peer scoring | defaults | Mostly arithmetic and conditionals |
+
+---
+
+## Gremlins-Specific Gotchas
+
+### Pre-1.0 API
+
+Gremlins is at v0.x. Config flags can change between minor releases. Pin a version in `install-gremlins.sh` and bump deliberately.
+
+### Doesn't Scale to Huge Modules
+
+Per the upstream README, runs on very large modules can take hours. Use per-package invocation always.
+
+### `NOT VIABLE` Excluded From Score
+
+`NOT VIABLE` mutants (mutations that fail to compile) are excluded from `test_efficacy` and `mutations_coverage`. This is correct — they're impossible to kill — but be aware that a high `not_viable` count can mean gremlins is generating low-quality mutants for your code.
+
+### Build Tags
+
+If your tests rely on build tags (e.g., `//go:build integration`), pass `--tags`:
+
+```bash
+gremlins unleash --tags integration ./...
+```
+
+For tests that only run with `--integration`, also pass `--integration` to gremlins.
+
+### Test Cache
+
+Gremlins runs tests with `-count=1`-like behavior under the hood — test cache shouldn't interfere. If you see suspicious results, ensure your tests aren't reading external state that varies between runs.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Chasing 100% Score
+### Pitfall 1: Treating efficacy as a goal
 
-**Problem**: Spending excessive time on equivalent mutants or trivial code.
+Aiming for 100% efficacy on a non-critical package wastes time on equivalent mutants. Set targets by code class (see SKILL.md table).
 
-**Solution**: Accept 85-95% as excellent for most code. Focus on high-impact survivors.
+### Pitfall 2: Mutating test code
 
-### Pitfall 2: Ignoring Context
+Gremlins doesn't mutate `_test.go` files by default — but if a test imports a helper package, the helper package's mutants will run. Skip helper-only packages.
 
-**Problem**: Treating all code equally regardless of risk.
+### Pitfall 3: Slow / flaky tests
 
-**Solution**: Higher standards for critical code, lower for trivial code.
+Mutation testing amplifies test flakiness — every mutant runs the suite. Fix flaky tests before mutation testing or you'll chase ghosts.
 
-### Pitfall 3: Overfitting Tests
+### Pitfall 4: Ignoring `mutations_coverage`
 
-**Problem**: Writing tests that only pass because they match current implementation details.
+A 95% efficacy with 40% coverage means most code isn't tested at all — efficacy only measures what's covered. Always read both metrics.
 
-**Solution**: Use property-based tests and specify behavior, not implementation.
+### Pitfall 5: One-off audits
 
-### Pitfall 4: Slow Execution
+Mutation testing is most valuable in CI as a regression gate. A single audit fades; a threshold gate doesn't.
 
-**Problem**: Running all tests for every mutation.
+### Pitfall 6: Confusing `LIVED` with bug
 
-**Solution**: Use coverage-guided test selection and parallel execution.
-
-### Pitfall 5: False Confidence
-
-**Problem**: High mutation score with weak tests that happen to kill mutants accidentally.
-
-**Solution**: Review surviving mutants and ensure killed mutants are killed for the right reasons.
-
-### Pitfall 6: Mutating Test Code
-
-**Problem**: Generating mutations in test files themselves.
-
-**Solution**: Only mutate production code, never test code.
-
-### Pitfall 7: Ignoring Timeouts
-
-**Problem**: Treating timeouts as killed mutants.
-
-**Solution**: Investigate timeouts—they often reveal performance bugs or infinite loops.
-
----
-
-## Advanced Techniques
-
-### Differential Mutation Testing
-
-Compare mutation scores between versions:
-
-```bash
-# Baseline (main branch)
-git checkout main
-run_mutations.sh > baseline_mutations.json
-
-# Current (feature branch)
-git checkout feature
-run_mutations.sh > current_mutations.json
-
-# Compare
-diff_mutations.sh baseline_mutations.json current_mutations.json
-```
-
-### Mutation Coverage
-
-Track which parts of code have been mutated:
-
-```
-File: wallet.go
-Lines with mutations: 45/100 (45%)
-Functions with mutations: 8/12 (67%)
-
-Unmutated areas:
-- Lines 1-20: Type definitions (intentionally skipped)
-- Lines 80-95: Simple getters (low value)
-- Lines 120-130: TODO: Generate mutations
-```
-
-### Cost-Benefit Analysis
-
-Track time spent vs. bugs found:
-
-```
-Mutation testing time: 30 minutes per PR
-Bugs found by improved tests: 3 critical bugs/month
-Time saved by preventing bugs: ~10 hours/month
-
-ROI: (10 hours saved - 2 hours spent) = +8 hours/month
-```
+A `LIVED` mutant doesn't mean there's a bug in production code — it means the test suite wouldn't catch *one specific kind of bug*. Whether that matters depends on whether the mutated code path is reachable in production with bug-causing inputs.
 
 ---
 
 ## Summary Checklist
 
-Before running mutation testing:
-- [ ] Identify high-priority code to mutate
-- [ ] Ensure baseline tests pass
-- [ ] Set appropriate mutation score targets
-- [ ] Configure parallel execution
-- [ ] Set up caching for large codebases
+Before:
+- [ ] Pin gremlins version
+- [ ] Choose target packages (mission-critical first)
+- [ ] Verify baseline tests pass cleanly with no flakes
+- [ ] Configure mutators per code class
 
-During mutation testing:
-- [ ] Monitor for timeouts and investigate
-- [ ] Categorize survivors by reason
-- [ ] Generate targeted tests for high-priority survivors
+During:
+- [ ] Watch for high `NOT VIABLE` counts (mutator quality)
+- [ ] Distinguish boundary, weak-assertion, and missing-test gaps
 - [ ] Mark equivalent mutants
-- [ ] Track mutation types that survive most
 
-After mutation testing:
-- [ ] Review mutation score in context
-- [ ] Generate actionable test improvements
-- [ ] Update equivalent mutants list
-- [ ] Document findings and patterns
-- [ ] Integrate into CI/CD if valuable
+After:
+- [ ] Add targeted tests for high-priority survivors
+- [ ] Re-run to confirm
+- [ ] Wire threshold gate into CI
 
 For mission-critical code:
-- [ ] Achieve 90%+ mutation score
-- [ ] Manually review all survivors
-- [ ] Test boundary conditions exhaustively
-- [ ] Verify security-critical mutations are killed
-- [ ] Use property-based tests for key invariants
+- [ ] All mutators enabled
+- [ ] 90%+ test_efficacy
+- [ ] 85%+ mutations_coverage
+- [ ] All survivors reviewed (killed or documented as equivalent)
