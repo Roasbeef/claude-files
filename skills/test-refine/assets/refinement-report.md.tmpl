@@ -1,0 +1,86 @@
+# Test Refinement Report
+
+**Date**: {{DATE}}
+**Scope**: {{SCOPE}}
+**Slug**: {{SLUG}}
+
+## Summary
+
+- **Total findings**: {{TOTAL}} ({{H_COUNT}} high, {{M_COUNT}} medium, {{L_COUNT}} low)
+- {{COVERAGE_LINE}}
+- {{MUTATION_LINE}}
+
+> Each fix below has a checkbox. Check the box to approve the fix; leave unchecked to skip.
+> When done, run `apply-fixes.sh --report <this-file>`. Only checked items are applied.
+> **Test removals require an explicit checkbox under the "Removal Candidates" section.**
+
+## Top Findings
+
+| # | Priority | File:Line | Smell | Sev | Test | Message |
+|---|---|---|---|---|---|---|
+{{TOP_FINDINGS_TABLE}}
+
+## Findings (Apply Approved)
+
+{{#each FINDINGS}}
+### F{{IDX}} — `{{FILE}}:{{LINE}}` — {{SMELL}} ({{SEVERITY}}) — priority {{PRIORITY}}
+
+- [ ] **Apply fix**
+- **Test**: `{{TEST_NAME}}`
+- **Function under test**: `{{FUNCTION_UNDER_TEST}}`
+- **Smell**: {{MESSAGE}}
+- **Suggestion**: {{SUGGESTION}}
+
+{{#if ORIGINAL_CODE}}
+**Original**:
+```go
+{{ORIGINAL_CODE}}
+```
+
+**Proposed rewrite**:
+```go
+{{REWRITE}}
+```
+{{/if}}
+
+{{/each}}
+
+## Removal Candidates
+
+These tests were flagged as trivial or duplicate. Removal requires an explicit checkbox.
+
+{{#each REMOVALS}}
+- [ ] **Remove** `{{FILE}}:{{LINE}}` — `{{TEST_NAME}}` — {{SMELL}}: {{MESSAGE}}
+{{/each}}
+
+## Property-Based Testing Candidates
+
+Functions with patterns suggesting a property-based rewrite (rapid).
+
+{{#each PBT_CANDIDATES}}
+- [ ] **Reshape** `{{FUNCTION_UNDER_TEST}}` — {{MESSAGE}}
+      Suggested property: {{SUGGESTION}}
+{{/each}}
+
+## Domain Checks
+
+{{#each DOMAIN_FINDINGS_BY_CODE}}
+### {{CODE}} ({{COUNT}})
+
+{{#each ITEMS}}
+- [ ] `{{FILE}}:{{LINE}}` — `{{FUNCTION_UNDER_TEST}}` — {{MESSAGE}}
+{{/each}}
+
+{{/each}}
+
+---
+
+## Next Step
+
+```bash
+~/.claude/skills/test-refine/scripts/apply-fixes.sh \
+    --report {{REPORT_PATH}}
+```
+
+Add `--verify-mutations` to re-run gremlins after fixes and confirm
+`test_efficacy` did not regress.
