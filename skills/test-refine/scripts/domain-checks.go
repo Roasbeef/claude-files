@@ -39,6 +39,7 @@ type Finding struct {
 	Severity          string  `json:"severity"`
 	Message           string  `json:"message"`
 	Confidence        float64 `json:"confidence,omitempty"`
+	FixKind           string  `json:"fix_kind,omitempty"`
 	FunctionUnderTest string  `json:"function_under_test,omitempty"`
 	Suggestion        string  `json:"suggestion,omitempty"`
 }
@@ -58,7 +59,16 @@ func main() {
 	tests := parseFiles(fset, testFiles)
 
 	enc := json.NewEncoder(os.Stdout)
-	emit := func(f Finding) { _ = enc.Encode(f) }
+	// Every domain-check finding describes a missing test or a
+	// determinism violation that needs a real test written. Default
+	// fix_kind to "manual" — apply-fixes leaves a TODO comment for
+	// these rather than attempting an automatic edit.
+	emit := func(f Finding) {
+		if f.FixKind == "" {
+			f.FixKind = "manual"
+		}
+		_ = enc.Encode(f)
+	}
 
 	// --- Determinism checks (in test files only) ---
 	for path, file := range tests {
@@ -165,6 +175,51 @@ func main() {
 				Suggestion:        "use rapid to assert: " + roundtripFor(kind, fn.fn.Name.Name, baseName(other)),
 			})
 		}
+	}
+
+	// --- State-machine PBT detection (DEF2) ---
+	// A receiver type with multiple methods that return error and
+	// (presumably) mutate internal state is the canonical shape for
+	// rapid.StateMachine. Group prodFuncs by receiver type and emit a
+	// candidate when the count crosses a threshold.
+	receivers := map[string][]string{} // type -> []method names
+	receiverFiles := map[string]string{}
+	receiverLines := map[string]int{}
+	for fnKey, fn := range prodFuncs {
+		if fn.fn.Recv == nil || len(fn.fn.Recv.List) == 0 {
+			continue
+		}
+		recv := receiverTypeName(fn.fn.Recv.List[0].Type)
+		if recv == "" {
+			continue
+		}
+		// Only count methods that return error — those are the
+		// transition-style methods most worth modeling.
+		if !returnsError(fn.fn) {
+			continue
+		}
+		receivers[recv] = append(receivers[recv], fn.fn.Name.Name)
+		if _, seen := receiverFiles[recv]; !seen {
+			receiverFiles[recv] = fn.path
+			receiverLines[recv] = fset.Position(fn.fn.Pos()).Line
+		}
+		_ = fnKey
+	}
+	for recv, methods := range receivers {
+		if len(methods) < 3 {
+			// Two methods is too few to motivate a state machine.
+			continue
+		}
+		emit(Finding{
+			File:              receiverFiles[recv],
+			Line:              receiverLines[recv],
+			Smell:             "D-PBT-STATE-MACHINE",
+			Severity:          "M",
+			Message:           fmt.Sprintf("%s has %d methods returning error; candidate for rapid.StateMachine modeling", recv, len(methods)),
+			Confidence:        0.6,
+			FunctionUnderTest: recv,
+			Suggestion:        "model with rapid.StateMachine: define Init/each-method as transitions, add a Check() method asserting invariants",
+		})
 	}
 }
 

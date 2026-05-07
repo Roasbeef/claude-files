@@ -33,6 +33,7 @@ type Finding struct {
 	Severity          string  `json:"severity"`
 	Message           string  `json:"message"`
 	Confidence        float64 `json:"confidence,omitempty"`
+	FixKind           string  `json:"fix_kind,omitempty"`
 	FunctionUnderTest string  `json:"function_under_test,omitempty"`
 	Context           string  `json:"context,omitempty"`
 	Suggestion        string  `json:"suggestion,omitempty"`

@@ -30,6 +30,7 @@ type Finding struct {
 	Severity   string  `json:"severity"`
 	Message    string  `json:"message"`
 	Confidence float64 `json:"confidence,omitempty"`
+	FixKind    string  `json:"fix_kind,omitempty"`
 	Context    string  `json:"context,omitempty"`
 	Suggestion string  `json:"suggestion,omitempty"`
 }
@@ -39,6 +40,18 @@ type testEntry struct {
 	line int
 	name string
 	hash string
+	// delegation describes the test's body when it is a single-call
+	// delegation to a runner. nil otherwise.
+	delegation *delegationShape
+}
+
+// delegationShape captures the runner-call signature: the callee name
+// and a normalized arg list. Two tests that share a runner but differ
+// only in one constant-typed argument are restart-variant siblings,
+// not real duplicates.
+type delegationShape struct {
+	callee string
+	args   []string // canonical arg renderings; "<lit>" for literals
 }
 
 func main() {
@@ -65,15 +78,19 @@ func main() {
 			}
 			h := hashBody(fn.Body)
 			entries = append(entries, testEntry{
-				file: path,
-				line: fset.Position(fn.Pos()).Line,
-				name: fn.Name.Name,
-				hash: h,
+				file:       path,
+				line:       fset.Position(fn.Pos()).Line,
+				name:       fn.Name.Name,
+				hash:       h,
+				delegation: delegationOf(fn.Body),
 			})
 		}
 	}
 
-	// Group by hash.
+	// Group entries that hash identically. These hash to the same
+	// AST modulo locals and literal values, so they're either real
+	// duplicates or restart-variant siblings (single-call delegations
+	// to the same runner with different constant args).
 	groups := map[string][]testEntry{}
 	for _, e := range entries {
 		groups[e.hash] = append(groups[e.hash], e)
@@ -89,6 +106,34 @@ func main() {
 		for _, e := range g {
 			names = append(names, e.name)
 		}
+
+		// Restart-variant detection: every group member is a single
+		// delegation to the same runner. In that case demote from
+		// duplicate-removal candidate to a softer "consider table-
+		// driving" suggestion.
+		shape, allDelegate := commonDelegation(g)
+		smell := "S08"
+		severity := "M"
+		conf := 0.6
+		fixKind := "auto"
+		message := func(peers []string) string {
+			return fmt.Sprintf("structurally duplicate test of: %s",
+				strings.Join(peers, ", "))
+		}
+		suggestion := "consolidate into a table-driven test, or delete duplicates"
+		if allDelegate && shape != nil {
+			smell = "S08-VARIANT"
+			severity = "L"
+			conf = 0.4
+			fixKind = "manual" // demote — needs human judgment.
+			message = func(peers []string) string {
+				return fmt.Sprintf(
+					"restart-variant sibling of: %s (single call to %s, differs only in arguments)",
+					strings.Join(peers, ", "), shape.callee)
+			}
+			suggestion = "if the variants share intent, consider a table-driven form; otherwise leave as-is"
+		}
+
 		for _, e := range g {
 			peers := make([]string, 0, len(names)-1)
 			for _, n := range names {
@@ -96,23 +141,114 @@ func main() {
 					peers = append(peers, n)
 				}
 			}
-			// Confidence is moderate: AST-normalized hashing is good
-			// at catching true duplicates but can also catch
-			// legitimate restart-variant tests that share a runner
-			// (see DEF1). Until DEF1 lands, surface as low-confidence.
 			_ = enc.Encode(Finding{
-				File:     e.file,
-				Line:     e.line,
-				TestName: e.name,
-				Smell:    "S08",
-				Severity: "M",
-				Message: fmt.Sprintf("structurally duplicate test of: %s",
-					strings.Join(peers, ", ")),
-				Confidence: 0.6,
-				Suggestion: "consolidate into a table-driven test, or delete duplicates",
+				File:       e.file,
+				Line:       e.line,
+				TestName:   e.name,
+				Smell:      smell,
+				Severity:   severity,
+				Message:    message(peers),
+				Confidence: conf,
+				FixKind:    fixKind,
+				Suggestion: suggestion,
 			})
 		}
 	}
+}
+
+// delegationOf returns a delegationShape iff the body is a single
+// ExprStmt CallExpr with a resolvable callee — i.e. the test runs by
+// delegating to one helper.
+func delegationOf(body *ast.BlockStmt) *delegationShape {
+	if body == nil || len(body.List) != 1 {
+		return nil
+	}
+	es, ok := body.List[0].(*ast.ExprStmt)
+	if !ok {
+		return nil
+	}
+	call, ok := es.X.(*ast.CallExpr)
+	if !ok {
+		return nil
+	}
+	var callee string
+	switch fn := call.Fun.(type) {
+	case *ast.Ident:
+		callee = fn.Name
+	case *ast.SelectorExpr:
+		callee = fn.Sel.Name
+	default:
+		return nil
+	}
+	args := make([]string, len(call.Args))
+	for i, a := range call.Args {
+		args[i] = canonicalArg(a)
+	}
+	return &delegationShape{callee: callee, args: args}
+}
+
+// canonicalArg renders an argument in a form that distinguishes
+// "literal" from named identifiers. Used to detect "differs only in
+// constant arguments" between sibling tests.
+func canonicalArg(e ast.Expr) string {
+	switch v := e.(type) {
+	case *ast.BasicLit:
+		return "<lit>"
+	case *ast.Ident:
+		if v.Name == "true" || v.Name == "false" || v.Name == "nil" {
+			return "<const>"
+		}
+		// Named constants (often iota-typed enums) are exactly the
+		// thing restart-variant siblings differ in. Treat as <const>
+		// so they collapse together.
+		if isUpperFirst(v.Name) {
+			return "<const>"
+		}
+		return v.Name
+	case *ast.SelectorExpr:
+		return canonicalArg(v.X) + "." + v.Sel.Name
+	case *ast.CallExpr:
+		// E.g., context.Background(); preserve callee shape.
+		if id, ok := v.Fun.(*ast.Ident); ok {
+			return id.Name + "()"
+		}
+		if sel, ok := v.Fun.(*ast.SelectorExpr); ok {
+			return canonicalArg(sel.X) + "." + sel.Sel.Name + "()"
+		}
+		return "<call>"
+	}
+	return "<expr>"
+}
+
+func isUpperFirst(s string) bool {
+	if s == "" {
+		return false
+	}
+	c := s[0]
+	return c >= 'A' && c <= 'Z'
+}
+
+// commonDelegation returns the shared delegation shape iff every entry
+// in the group is a delegation to the same callee. The returned shape
+// is one canonical instance; callers that need per-entry args should
+// re-derive them.
+func commonDelegation(group []testEntry) (*delegationShape, bool) {
+	if len(group) == 0 {
+		return nil, false
+	}
+	first := group[0].delegation
+	if first == nil {
+		return nil, false
+	}
+	for _, e := range group[1:] {
+		if e.delegation == nil || e.delegation.callee != first.callee {
+			return nil, false
+		}
+		if len(e.delegation.args) != len(first.args) {
+			return nil, false
+		}
+	}
+	return first, true
 }
 
 func isTestFunc(fn *ast.FuncDecl) bool {

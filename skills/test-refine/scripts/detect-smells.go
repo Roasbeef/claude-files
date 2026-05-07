@@ -22,6 +22,12 @@ import (
 )
 
 // Finding represents one smell detection.
+//
+// fix_kind classifies how the fix is applied:
+//   - "auto":   mechanical edit (delete a tautology, drop a duplicate)
+//     that apply-fixes can perform with an Edit tool call.
+//   - "manual": requires writing a new test or understanding test
+//     intent; apply-fixes leaves a TODO comment instead.
 type Finding struct {
 	File       string  `json:"file"`
 	Line       int     `json:"line"`
@@ -30,8 +36,23 @@ type Finding struct {
 	Severity   string  `json:"severity"`
 	Message    string  `json:"message"`
 	Confidence float64 `json:"confidence,omitempty"`
+	FixKind    string  `json:"fix_kind,omitempty"`
 	Context    string  `json:"context,omitempty"`
 	Suggestion string  `json:"suggestion,omitempty"`
+}
+
+// smellFixKind returns the canonical fix_kind for each smell ID.
+// Most smells are "manual" because they require an assertion to be
+// written or test intent to be understood. Only smells whose fix is
+// "delete this test" or "delete this redundant code" are "auto".
+func smellFixKind(smell string) string {
+	switch smell {
+	case "S02", // tautology — delete the assertion (or the whole test)
+		"S03", // getter/setter trivial — delete the test
+		"S08": // duplicate — delete one
+		return "auto"
+	}
+	return "manual"
 }
 
 // pkgIndex captures package-wide signals used to refine detection.
@@ -77,6 +98,16 @@ type parsedFile struct {
 	file *ast.File
 }
 
+// testStyle records the assertion style used inside one test func,
+// for the package-wide style-drift pass.
+type testStyle struct {
+	path       string
+	startLine  int
+	fnName     string
+	manualFail bool // uses `if x != y { t.Errorf(...) }`
+	usesAssert bool // uses require.* / assert.*
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: detect-smells <file_test.go> [more...]")
@@ -102,8 +133,11 @@ func main() {
 
 	idx := buildPkgIndex(files)
 
-	// Second pass: analyze each file.
+	// Second pass: analyze each file. Capture per-test style so we can
+	// run the package-wide drift detector after.
 	enc := json.NewEncoder(os.Stdout)
+	var styles []testStyle
+
 	for _, p := range files {
 		var findings []Finding
 		for _, decl := range p.file.Decls {
@@ -112,9 +146,112 @@ func main() {
 				continue
 			}
 			findings = append(findings, analyzeTestFunc(p.fset, p.path, fn, idx)...)
+
+			// Style classification for the package-wide drift pass.
+			style := testStyle{
+				path:      p.path,
+				startLine: p.fset.Position(fn.Pos()).Line,
+				fnName:    fn.Name.Name,
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				c, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				sel, ok := c.Fun.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				if id, ok := sel.X.(*ast.Ident); ok {
+					if id.Name == "require" || id.Name == "assert" {
+						style.usesAssert = true
+					}
+				}
+				return true
+			})
+			if hasManualFail(fn.Body) {
+				style.manualFail = true
+			}
+			styles = append(styles, style)
 		}
 		for _, f := range findings {
 			_ = enc.Encode(f)
+		}
+	}
+
+	// Package-wide style drift (DEF5): if the codebase clearly prefers
+	// one assertion style (>70%), flag the minority as drift.
+	emitStyleDrift(enc, styles)
+}
+
+// emitStyleDrift compares each test's style to the package-wide
+// majority and emits S-STYLE-DRIFT findings for the minority. The
+// drift is interesting when one style accounts for >70% of tests
+// — below that the package has no clear convention and flagging
+// either side would just be noise.
+func emitStyleDrift(enc *json.Encoder, styles []testStyle) {
+	const dominanceThreshold = 0.7
+	if len(styles) < 4 {
+		// Too few tests to establish a convention.
+		return
+	}
+
+	manualCount, assertCount := 0, 0
+	for _, s := range styles {
+		// Don't double-count tests that use both styles — those are
+		// neutral evidence and don't push either way.
+		if s.manualFail && !s.usesAssert {
+			manualCount++
+		} else if s.usesAssert && !s.manualFail {
+			assertCount++
+		}
+	}
+	classified := manualCount + assertCount
+	if classified == 0 {
+		return
+	}
+
+	manualFrac := float64(manualCount) / float64(classified)
+	assertFrac := float64(assertCount) / float64(classified)
+
+	switch {
+	case assertFrac >= dominanceThreshold:
+		// require/assert is dominant; flag tests that use only manual fail.
+		for _, s := range styles {
+			if s.manualFail && !s.usesAssert {
+				_ = enc.Encode(Finding{
+					File:     s.path,
+					Line:     s.startLine,
+					TestName: s.fnName,
+					Smell:    "S-STYLE-DRIFT",
+					Severity: "L",
+					Message: fmt.Sprintf(
+						"package uses require/assert in %.0f%% of tests; this test uses `if got != want { t.Errorf }` style",
+						assertFrac*100),
+					Confidence: 0.8,
+					FixKind:    "auto",
+					Suggestion: "convert to require.Equal(t, want, got) for consistency",
+				})
+			}
+		}
+	case manualFrac >= dominanceThreshold:
+		// manual t.Errorf is dominant; flag tests that pull in require/assert.
+		for _, s := range styles {
+			if s.usesAssert && !s.manualFail {
+				_ = enc.Encode(Finding{
+					File:     s.path,
+					Line:     s.startLine,
+					TestName: s.fnName,
+					Smell:    "S-STYLE-DRIFT",
+					Severity: "L",
+					Message: fmt.Sprintf(
+						"package uses `if got != want { t.Errorf }` style in %.0f%% of tests; this test uses require/assert",
+						manualFrac*100),
+					Confidence: 0.8,
+					FixKind:    "auto",
+					Suggestion: "convert to manual fail style for consistency, or migrate the package wholesale",
+				})
+			}
 		}
 	}
 }
@@ -192,6 +329,7 @@ func analyzeTestFunc(fset *token.FileSet, path string, fn *ast.FuncDecl, idx *pk
 			Severity:   severity,
 			Message:    msg,
 			Confidence: conf,
+			FixKind:    smellFixKind(smell),
 		})
 	}
 

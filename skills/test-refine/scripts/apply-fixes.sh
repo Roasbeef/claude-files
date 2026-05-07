@@ -155,23 +155,35 @@ JQ_PROG='
 '
 ENRICHED="$(jq "$JQ_PROG" "$FINDINGS")"
 
+# Resolve approved F<N> entries to full finding objects, then split
+# by fix_kind so the consumer (the agent) knows which findings can be
+# applied mechanically vs which need manual TODO comments.
+APPROVED_FULL="["
+first=1
+for f in "${APPROVED_F[@]}"; do
+    match="$(echo "$ENRICHED" | jq --arg id "$f" '.[] | select(.f_id == $id)')"
+    [[ -z "$match" || "$match" == "null" ]] && continue
+    if [[ "$first" -eq 0 ]]; then APPROVED_FULL+=","; fi
+    APPROVED_FULL+="$match"
+    first=0
+done
+APPROVED_FULL+="]"
+
+AUTO="$(echo "$APPROVED_FULL" | jq '[.[] | select((.fix_kind // "manual") == "auto")]')"
+MANUAL="$(echo "$APPROVED_FULL" | jq '[.[] | select((.fix_kind // "manual") != "auto")]')"
+AUTO_N="$(echo "$AUTO" | jq 'length')"
+MANUAL_N="$(echo "$MANUAL" | jq 'length')"
+
 # Print action plan.
 {
     echo "{"
     echo "  \"report\": \"$REPORT\","
     echo "  \"findings_json\": \"$FINDINGS\","
     echo "  \"approved_count\": $total,"
-    echo "  \"approved_strengthen\": ["
-    first=1
-    for f in "${APPROVED_F[@]}"; do
-        match="$(echo "$ENRICHED" | jq --arg id "$f" '.[] | select(.f_id == $id)')"
-        [[ -z "$match" || "$match" == "null" ]] && continue
-        if [[ "$first" -eq 0 ]]; then echo ","; fi
-        echo -n "    $match"
-        first=0
-    done
-    echo
-    echo "  ],"
+    echo "  \"counts\": { \"auto\": $AUTO_N, \"manual\": $MANUAL_N },"
+    echo "  \"guidance\": \"For 'auto' findings, apply the edit directly (delete the test or assertion). For 'manual' findings, write a TODO comment in the test file referencing this report path; the human/agent then writes the real test.\","
+    echo "  \"approved_auto\": $AUTO,"
+    echo "  \"approved_manual\": $MANUAL,"
     echo "  \"approved_removals\": ["
     first=1
     for r in "${APPROVED_REMOVE[@]}"; do

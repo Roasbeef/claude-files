@@ -76,6 +76,12 @@ L_COUNT="$(jq '[.[] | select(.severity == "L")] | length' "$FINDINGS")"
 HI_CONF="$(jq '[.[] | select((.confidence // 1.0) >= 0.7)] | length' "$FINDINGS")"
 LO_CONF="$(jq '[.[] | select((.confidence // 1.0) < 0.7)] | length' "$FINDINGS")"
 
+# Fix-kind split (DEF3): "auto" findings can be mechanically applied
+# (e.g., delete a tautology); "manual" findings require writing real
+# test code or understanding intent.
+AUTO_FIX="$(jq '[.[] | select((.fix_kind // "manual") == "auto")] | length' "$FINDINGS")"
+MANUAL_FIX="$(jq '[.[] | select((.fix_kind // "manual") != "auto")] | length' "$FINDINGS")"
+
 # Coverage summary line.
 COV_LINE="(coverage analysis skipped)"
 if [[ -n "$COVERAGE" && -s "$COVERAGE" ]]; then
@@ -93,6 +99,28 @@ if [[ -n "$GREMLINS" && -s "$GREMLINS" ]]; then
     MUT_LINE="**Mutation testing**: efficacy=${eff}%, coverage=${cov}%, killed=${killed}, lived=${lived}"
 fi
 
+# Pre-flight sampler banner (DEF4): on a sample of the top findings,
+# count how many are high-confidence. If under 60% of the sample is
+# high-confidence, the report likely has a high false-positive rate
+# and the user should manually verify before acting.
+SAMPLE_SIZE=5
+[[ "$TOTAL" -lt "$SAMPLE_SIZE" ]] && SAMPLE_SIZE="$TOTAL"
+BANNER=""
+if [[ "$SAMPLE_SIZE" -gt 0 ]]; then
+    PLAUSIBLE="$(jq --argjson n "$SAMPLE_SIZE" \
+        '[.[:$n][] | select((.confidence // 1.0) >= 0.7)] | length' "$FINDINGS")"
+    # Threshold: < 60% (i.e., fewer than 3 of 5).
+    threshold=$(( SAMPLE_SIZE * 60 / 100 ))
+    if [[ "$PLAUSIBLE" -lt "$threshold" ]]; then
+        BANNER="
+> ⚠ **Spot-check warning**: only $PLAUSIBLE of the top $SAMPLE_SIZE findings are
+> high-confidence. The report likely has a high false-positive rate.
+> Manually verify each finding before acting; consider re-running with
+> a narrower scope or with --use-mutations for stronger signal.
+"
+    fi
+fi
+
 {
 cat <<HEADER
 # Test Refinement Report
@@ -100,11 +128,12 @@ cat <<HEADER
 **Date**: $DATE
 **Scope**: $SCOPE
 **Slug**: $SLUG
-
+$BANNER
 ## Summary
 
 - **Total findings**: $TOTAL ($H_COUNT high-severity, $M_COUNT medium, $L_COUNT low)
 - **Confidence**: $HI_CONF high-confidence, $LO_CONF need manual verification
+- **Fix kind**: $AUTO_FIX auto (mechanical), $MANUAL_FIX manual (needs new test or intent)
 - $COV_LINE
 - $MUT_LINE
 
@@ -114,8 +143,8 @@ cat <<HEADER
 
 ## Top Findings
 
-| # | Priority | Conf | File:Line | Smell | Sev | Test | Message |
-|---|---|---|---|---|---|---|---|
+| # | Priority | Conf | Fix | File:Line | Smell | Sev | Test | Message |
+|---|---|---|---|---|---|---|---|---|
 HEADER
 
 jq -r --argjson top "$TOP" '
@@ -127,13 +156,14 @@ jq -r --argjson top "$TOP" '
       .idx,
       (.value.priority // 0 | . * 100 | floor / 100),
       ((.value.confidence // 1.0) | . * 100 | floor / 100),
+      (.value.fix_kind // "manual"),
       "\(.value.file):\(.value.line)\(if (.value._dup_count // 1) > 1 then " (×\(.value._dup_count))" else "" end)",
       .value.smell,
       .value.severity,
       (.value.test_name // ""),
       ((.value.message // "") | .[0:70])
     ]
-  | "| \(.[0]) | \(.[1]) | \(.[2]) | \(.[3]) | \(.[4]) | \(.[5]) | \(.[6]) | \(.[7]) |"
+  | "| \(.[0]) | \(.[1]) | \(.[2]) | \(.[3]) | \(.[4]) | \(.[5]) | \(.[6]) | \(.[7]) | \(.[8]) |"
 ' "$FINDINGS"
 
 cat <<'DETAIL_HEADER'
