@@ -139,6 +139,29 @@ FINDINGS="$FINDINGS_DIR/$SLUG.json"
 COV_OUT="$FINDINGS_DIR/$SLUG-coverage.txt"
 GREMLINS_OUT="$FINDINGS_DIR/$SLUG-gremlins.json"
 
+# --- Build-tag preflight ---
+# When test files in scope use //go:build tags (typical for itest/, _e2e
+# files, etc.), 'go test' without --tags will silently skip the entire
+# file from the build. Coverage will then read 0.0% — misleading. Detect
+# this case and warn before running coverage.
+BUILD_TAGS_FOUND=()
+for f in "${TEST_FILES[@]}"; do
+    [[ -f "$f" ]] || continue
+    # Match `//go:build` directives in the first 30 lines.
+    tag_line="$(head -n 30 "$f" 2>/dev/null | grep -m1 '^//go:build ' || true)"
+    if [[ -n "$tag_line" ]]; then
+        BUILD_TAGS_FOUND+=("$f: $tag_line")
+    fi
+done
+if [[ ${#BUILD_TAGS_FOUND[@]} -gt 0 && "$DO_COVERAGE" -eq 1 ]]; then
+    echo "warn: ${#BUILD_TAGS_FOUND[@]} test file(s) in scope use //go:build directives." >&2
+    echo "      Coverage will be misleading unless you re-run with --no-coverage" >&2
+    echo "      or invoke 'go test' with matching --tags. Affected files:" >&2
+    for entry in "${BUILD_TAGS_FOUND[@]}"; do
+        echo "      - $entry" >&2
+    done
+fi
+
 # --- Step 1: coverage ---
 if [[ "$DO_COVERAGE" -eq 1 ]]; then
     echo "Running coverage..."

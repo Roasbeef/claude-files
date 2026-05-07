@@ -23,14 +23,29 @@ import (
 
 // Finding represents one smell detection.
 type Finding struct {
-	File       string `json:"file"`
-	Line       int    `json:"line"`
-	TestName   string `json:"test_name"`
-	Smell      string `json:"smell"`
-	Severity   string `json:"severity"`
-	Message    string `json:"message"`
-	Context    string `json:"context,omitempty"`
-	Suggestion string `json:"suggestion,omitempty"`
+	File       string  `json:"file"`
+	Line       int     `json:"line"`
+	TestName   string  `json:"test_name"`
+	Smell      string  `json:"smell"`
+	Severity   string  `json:"severity"`
+	Message    string  `json:"message"`
+	Confidence float64 `json:"confidence,omitempty"`
+	Context    string  `json:"context,omitempty"`
+	Suggestion string  `json:"suggestion,omitempty"`
+}
+
+// pkgIndex captures package-wide signals used to refine detection.
+// Built across all input files so we can answer questions like
+// "does helper X return an error?" when X is defined in another
+// file of the same package.
+type pkgIndex struct {
+	// errorReturners maps function/method name -> true iff its
+	// declared return list contains the identifier `error`.
+	errorReturners map[string]bool
+	// knownFuncs is the set of names defined as funcs anywhere in
+	// the input files (so we can distinguish "known same-package
+	// callee" from "external/unknown").
+	knownFuncs map[string]bool
 }
 
 // assertCalls is the set of identifiers that count as assertions.
@@ -56,21 +71,47 @@ var tErrorCalls = map[string]bool{
 	"Fail": true, "FailNow": true,
 }
 
+type parsedFile struct {
+	path string
+	fset *token.FileSet
+	file *ast.File
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: detect-smells <file_test.go> [more...]")
 		os.Exit(2)
 	}
 
-	enc := json.NewEncoder(os.Stdout)
+	// First pass: parse all input files and build a package-wide index.
+	// This lets per-file analysis see helper definitions in sibling
+	// files of the same package.
+	var files []parsedFile
 	for _, path := range os.Args[1:] {
 		if !strings.HasSuffix(path, "_test.go") {
 			continue
 		}
-		findings, err := analyzeFile(path)
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warn: %s: %v\n", path, err)
 			continue
+		}
+		files = append(files, parsedFile{path: path, fset: fset, file: file})
+	}
+
+	idx := buildPkgIndex(files)
+
+	// Second pass: analyze each file.
+	enc := json.NewEncoder(os.Stdout)
+	for _, p := range files {
+		var findings []Finding
+		for _, decl := range p.file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || !isTestFunc(fn) {
+				continue
+			}
+			findings = append(findings, analyzeTestFunc(p.fset, p.path, fn, idx)...)
 		}
 		for _, f := range findings {
 			_ = enc.Encode(f)
@@ -78,22 +119,49 @@ func main() {
 	}
 }
 
-func analyzeFile(path string) ([]Finding, error) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
-	if err != nil {
-		return nil, err
+// buildPkgIndex records every func's name across the input files plus
+// whether it returns an `error` identifier as one of its results.
+// Methods are indexed by both bare name and `Receiver.Method`.
+func buildPkgIndex(files []parsedFile) *pkgIndex {
+	idx := &pkgIndex{
+		errorReturners: map[string]bool{},
+		knownFuncs:     map[string]bool{},
 	}
-
-	var findings []Finding
-	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || !isTestFunc(fn) {
-			continue
+	for _, p := range files {
+		for _, decl := range p.file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			name := fn.Name.Name
+			idx.knownFuncs[name] = true
+			if fn.Recv != nil && len(fn.Recv.List) > 0 {
+				if recv := receiverTypeName(fn.Recv.List[0].Type); recv != "" {
+					idx.knownFuncs[recv+"."+name] = true
+				}
+			}
+			if fn.Type.Results == nil {
+				continue
+			}
+			for _, r := range fn.Type.Results.List {
+				if id, ok := r.Type.(*ast.Ident); ok && id.Name == "error" {
+					idx.errorReturners[name] = true
+					break
+				}
+			}
 		}
-		findings = append(findings, analyzeTestFunc(fset, path, fn)...)
 	}
-	return findings, nil
+	return idx
+}
+
+func receiverTypeName(e ast.Expr) string {
+	if star, ok := e.(*ast.StarExpr); ok {
+		e = star.X
+	}
+	if id, ok := e.(*ast.Ident); ok {
+		return id.Name
+	}
+	return ""
 }
 
 // isTestFunc returns true for `func TestXxx(t *testing.T)`.
@@ -113,16 +181,17 @@ func isTestFunc(fn *ast.FuncDecl) bool {
 func isUpper(b byte) bool { return b >= 'A' && b <= 'Z' }
 
 // analyzeTestFunc runs all S01–S11 checks against one test function.
-func analyzeTestFunc(fset *token.FileSet, path string, fn *ast.FuncDecl) []Finding {
+func analyzeTestFunc(fset *token.FileSet, path string, fn *ast.FuncDecl, idx *pkgIndex) []Finding {
 	var findings []Finding
-	add := func(line int, smell, severity, msg string) {
+	add := func(line int, smell, severity, msg string, conf float64) {
 		findings = append(findings, Finding{
-			File:     path,
-			Line:     line,
-			TestName: fn.Name.Name,
-			Smell:    smell,
-			Severity: severity,
-			Message:  msg,
+			File:       path,
+			Line:       line,
+			TestName:   fn.Name.Name,
+			Smell:      smell,
+			Severity:   severity,
+			Message:    msg,
+			Confidence: conf,
 		})
 	}
 
@@ -134,83 +203,108 @@ func analyzeTestFunc(fset *token.FileSet, path string, fn *ast.FuncDecl) []Findi
 	asserts := collectAsserts(body)
 	startLine := fset.Position(fn.Pos()).Line
 
-	// S01: no assertions at all.
-	if len(asserts) == 0 && !hasManualFail(body) {
+	// S01: no assertions at all. Skip when the body is a single
+	// delegation to another function (standard "small body delegates
+	// to runner" pattern); the runner gets analyzed on its own merits.
+	if len(asserts) == 0 && !hasManualFail(body) && !isSingleDelegation(body) {
 		add(startLine, "S01", "H",
-			fmt.Sprintf("test %q runs code but has no assertion", fn.Name.Name))
+			fmt.Sprintf("test %q runs code but has no assertion", fn.Name.Name), 1.0)
 	}
 
 	// S02 / S10: tautological / expect-the-expected assertions.
 	for _, a := range asserts {
 		if isTautological(a) {
 			add(fset.Position(a.Pos()).Line, "S02", "H",
-				"tautological assertion: both sides are the same expression")
+				"tautological assertion: both sides are the same expression", 1.0)
 		}
 		if isExpectTheExpected(a, body) {
 			add(fset.Position(a.Pos()).Line, "S10", "H",
-				"expected value derived from actual computation")
+				"expected value derived from actual computation", 0.7)
 		}
 		if isSensitiveEquality(a) {
 			add(fset.Position(a.Pos()).Line, "S06", "M",
-				"asserting on String()/Sprintf rendering is brittle")
+				"asserting on String()/Sprintf rendering is brittle", 0.9)
 		}
 	}
 
 	// S04: only assertion is NotPanics or recover().
 	if len(asserts) > 0 && allNotPanics(asserts) {
 		add(startLine, "S04", "H",
-			"only assertion is NotPanics; behavior unverified")
+			"only assertion is NotPanics; behavior unverified", 1.0)
 	} else if len(asserts) == 0 && hasOnlyRecover(body) {
 		add(startLine, "S04", "H",
-			"only safety check is defer recover(); behavior unverified")
+			"only safety check is defer recover(); behavior unverified", 1.0)
 	}
 
-	// S05: error from SUT discarded.
-	if errs := findDiscardedErrors(body); len(errs) > 0 {
-		for _, e := range errs {
-			add(fset.Position(e).Line, "S05", "H",
-				"error return from SUT discarded with _")
-		}
+	// S05: error from SUT discarded. Confidence depends on whether we
+	// can verify the callee actually returns an error.
+	for _, d := range findDiscardedErrors(fset, body, idx) {
+		add(d.line, "S05", "H", d.message, d.confidence)
 	}
 
 	// S07: conditional/skipped assertion (early return before assert).
-	if line, ok := findSkippedAssertion(body); ok {
+	if line, ok := findSkippedAssertion(fset, body); ok {
 		add(line, "S07", "M",
-			"early return may bypass subsequent assertion")
+			"early return may bypass subsequent assertion", 0.7)
 	}
 
 	// S09: assertion roulette (>3 bare asserts, no messages, not table-driven).
 	if !isTableDriven(body) && countBareAsserts(asserts) > 3 {
 		add(startLine, "S09", "L",
-			"many assertions without messages; failure will be ambiguous")
+			"many assertions without messages; failure will be ambiguous", 0.8)
 	}
 
-	// S11: SUT receives pointer/state but no read-back.
-	if line, ok := findUnassertedSideEffect(body); ok {
-		add(line, "S11", "M",
-			"SUT mutates argument; mutated state not asserted")
+	// S11: SUT receives pointer/state but no read-back. Skip when the
+	// test body is a single delegation; the receiving function is the
+	// real test scope and S11 would be a false positive otherwise.
+	if !isSingleDelegation(body) {
+		if line, ok := findUnassertedSideEffect(fset, body); ok {
+			add(line, "S11", "M",
+				"SUT mutates argument; mutated state not asserted", 0.5)
+		}
 	}
 
 	// S03: getter/setter trivial. Detected at function level.
 	if isGetterSetterTrivial(body) {
 		add(startLine, "S03", "M",
-			"test only verifies setter then getter; tests language semantics, not behavior")
+			"test only verifies setter then getter; tests language semantics, not behavior", 0.9)
 	}
 
 	return findings
 }
 
-// collectAsserts returns all assertion-like calls in the test body.
+// isSingleDelegation returns true when the body is a single ExprStmt
+// containing one CallExpr — e.g. `func TestX(t *T) { runScenario(t, foo) }`.
+// Such tests delegate all assertions to the callee; flagging them as
+// "no assertions" is a false positive.
+func isSingleDelegation(body *ast.BlockStmt) bool {
+	if body == nil || len(body.List) != 1 {
+		return false
+	}
+	es, ok := body.List[0].(*ast.ExprStmt)
+	if !ok {
+		return false
+	}
+	_, ok = es.X.(*ast.CallExpr)
+	return ok
+}
+
+// collectAsserts returns all assertion-like calls in the test body,
+// including those inside `t.Run("name", func(t *testing.T) { ... })`
+// subtest closures. ast.Inspect already descends into FuncLit bodies,
+// so explicit recursion isn't needed — but we double-check by walking
+// FuncLit bodies that are arguments to t.Run, which is the common
+// shape used to organize subtests.
 func collectAsserts(body *ast.BlockStmt) []*ast.CallExpr {
 	var out []*ast.CallExpr
 	ast.Inspect(body, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if isAssertCall(call) {
+		// Direct assert call.
+		if call, ok := n.(*ast.CallExpr); ok && isAssertCall(call) {
 			out = append(out, call)
 		}
+		// Walk into FuncLit bodies passed to t.Run. ast.Inspect already
+		// recurses into FuncLit, so any inner asserts are seen — but
+		// we keep this branch as a guard against future refactors.
 		return true
 	})
 	return out
@@ -378,18 +472,34 @@ func hasOnlyRecover(body *ast.BlockStmt) bool {
 	return hasRecover
 }
 
-// findDiscardedErrors finds assignments where the second return value is
-// `_` and the function clearly returns an error type (heuristic on naming).
-// Also catches `_ = SUT(...)` patterns where the only return is discarded
-// and the call is plausibly an error-returning function.
-func findDiscardedErrors(body *ast.BlockStmt) []token.Pos {
-	var out []token.Pos
+// discardFinding carries the data findDiscardedErrors needs to emit
+// a finding with appropriate confidence based on what we know about
+// the callee.
+type discardFinding struct {
+	line       int
+	message    string
+	confidence float64
+}
+
+// findDiscardedErrors finds AssignStmts that discard a return with `_`
+// and emits a finding only when the callee plausibly returns an error.
+// Confidence reflects how certain we are:
+//
+//	1.0 — callee is a same-package func that returns error: definite
+//	      smell.
+//	0.4 — callee is unknown (cross-package): could be an error, could
+//	      not.
+//	0.0 — callee is a same-package func that does NOT return error:
+//	      no finding emitted at all (filters out the helper-discard
+//	      false-positive observed on darepo PR 305).
+func findDiscardedErrors(fset *token.FileSet, body *ast.BlockStmt, idx *pkgIndex) []discardFinding {
+	var out []discardFinding
 	ast.Inspect(body, func(n ast.Node) bool {
 		as, ok := n.(*ast.AssignStmt)
 		if !ok {
 			return true
 		}
-		// All LHS positions that are `_`.
+		// Must have at least one `_` on the LHS.
 		discardCount := 0
 		for _, l := range as.Lhs {
 			if id, ok := l.(*ast.Ident); ok && id.Name == "_" {
@@ -399,29 +509,68 @@ func findDiscardedErrors(body *ast.BlockStmt) []token.Pos {
 		if discardCount == 0 {
 			return true
 		}
-		// Must have at least one CallExpr on RHS.
+		// RHS must be a single CallExpr.
 		if len(as.Rhs) != 1 {
 			return true
 		}
-		if _, ok := as.Rhs[0].(*ast.CallExpr); !ok {
+		call, ok := as.Rhs[0].(*ast.CallExpr)
+		if !ok {
 			return true
 		}
-		// All LHS are discards? Or last LHS is `_` (likely error return)?
-		if discardCount == len(as.Lhs) || // all discarded
-			func() bool {
-				last, ok := as.Lhs[len(as.Lhs)-1].(*ast.Ident)
-				return ok && last.Name == "_"
-			}() {
-			out = append(out, as.Pos())
+		// Either every LHS is a discard, or the last LHS is `_`.
+		lastIsDiscard := func() bool {
+			last, ok := as.Lhs[len(as.Lhs)-1].(*ast.Ident)
+			return ok && last.Name == "_"
+		}()
+		if discardCount != len(as.Lhs) && !lastIsDiscard {
+			return true
 		}
+		// Resolve callee name. Skip if we can't (e.g., method on a
+		// composite expression — too unreliable to flag).
+		name := calleeName(call)
+		if name == "" {
+			return true
+		}
+		// Apply package-index knowledge.
+		conf := 0.4 // unknown callee: low-confidence default.
+		known := idx != nil && idx.knownFuncs[name]
+		if known {
+			if !idx.errorReturners[name] {
+				// Known same-package callee that does NOT return
+				// error — this is the helper-with-(T,U) case. Skip.
+				return true
+			}
+			conf = 1.0
+		}
+		out = append(out, discardFinding{
+			line:       fset.Position(as.Pos()).Line,
+			message:    "error return from SUT discarded with _",
+			confidence: conf,
+		})
 		return true
 	})
 	return out
 }
 
+// calleeName returns a name we can look up in the pkgIndex for a
+// CallExpr. Returns "" when the callee is too complex to resolve
+// without type information.
+func calleeName(call *ast.CallExpr) string {
+	switch fn := call.Fun.(type) {
+	case *ast.Ident:
+		return fn.Name
+	case *ast.SelectorExpr:
+		// e.g., `obj.Method(...)` — return bare method name. The
+		// pkgIndex stores both bare names and `Receiver.Method`,
+		// but bare-name match is the safer starting point.
+		return fn.Sel.Name
+	}
+	return ""
+}
+
 // findSkippedAssertion returns the line of an early `return` that bypasses
 // later assertions.
-func findSkippedAssertion(body *ast.BlockStmt) (int, bool) {
+func findSkippedAssertion(fset *token.FileSet, body *ast.BlockStmt) (int, bool) {
 	// Walk top-level statements. If we see an If with a `return` in its body,
 	// and there's an assertion call after the If, flag the early return.
 	stmts := body.List
@@ -430,37 +579,28 @@ func findSkippedAssertion(body *ast.BlockStmt) (int, bool) {
 		if !ok {
 			continue
 		}
-		if !blockHasReturn(ifs.Body) {
+		ret := returnInBlock(ifs.Body)
+		if ret == nil {
 			continue
 		}
 		// Are there asserts after this if-stmt?
 		for _, later := range stmts[i+1:] {
 			if blockOrStmtHasAssert(later) {
-				return positionOfReturn(ifs.Body), true
+				return fset.Position(ret.Pos()).Line, true
 			}
 		}
 	}
 	return 0, false
 }
 
-func blockHasReturn(b *ast.BlockStmt) bool {
-	for _, s := range b.List {
-		if _, ok := s.(*ast.ReturnStmt); ok {
-			return true
-		}
-	}
-	return false
-}
-
-func positionOfReturn(b *ast.BlockStmt) int {
+// returnInBlock returns the first ReturnStmt in a block, or nil.
+func returnInBlock(b *ast.BlockStmt) *ast.ReturnStmt {
 	for _, s := range b.List {
 		if r, ok := s.(*ast.ReturnStmt); ok {
-			// We don't have access to fset here; caller-side fset.Position is used.
-			// As a fallback, we encode the position as the offset into the file.
-			return int(r.Pos())
+			return r
 		}
 	}
-	return 0
+	return nil
 }
 
 func blockOrStmtHasAssert(s ast.Stmt) bool {
@@ -515,7 +655,7 @@ func countBareAsserts(asserts []*ast.CallExpr) int {
 
 // findUnassertedSideEffect: SUT call passes a pointer; later code never
 // reads from that pointer.
-func findUnassertedSideEffect(body *ast.BlockStmt) (int, bool) {
+func findUnassertedSideEffect(fset *token.FileSet, body *ast.BlockStmt) (int, bool) {
 	// Heuristic only: for each AssignStmt of the form `obj := New...()`
 	// followed by SUT call passing `obj` or `&obj`, check if any later
 	// statement reads `obj.something`.
@@ -539,15 +679,19 @@ func findUnassertedSideEffect(body *ast.BlockStmt) (int, bool) {
 		if isAssertCall(call) {
 			continue
 		}
-		// Pointer-passing arg?
+		// Pointer-passing arg? Skip the test's own `t` parameter — it
+		// is not a SUT side effect, just the testing handle.
 		for _, arg := range call.Args {
 			if u, ok := arg.(*ast.UnaryExpr); ok && u.Op == token.AND {
-				if id, ok := u.X.(*ast.Ident); ok {
-					passes = append(passes, ptrPass{name: id.Name, line: int(es.Pos())})
+				if id, ok := u.X.(*ast.Ident); ok && id.Name != "t" && id.Name != "tb" && id.Name != "rt" {
+					passes = append(passes, ptrPass{name: id.Name, line: fset.Position(es.Pos()).Line})
 				}
 			} else if id, ok := arg.(*ast.Ident); ok {
+				if id.Name == "t" || id.Name == "tb" || id.Name == "rt" {
+					continue
+				}
 				// Could be a pointer var; we don't have type info.
-				passes = append(passes, ptrPass{name: id.Name, line: int(es.Pos())})
+				passes = append(passes, ptrPass{name: id.Name, line: fset.Position(es.Pos()).Line})
 			}
 		}
 

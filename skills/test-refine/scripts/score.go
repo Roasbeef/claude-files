@@ -32,6 +32,7 @@ type Finding struct {
 	Smell             string  `json:"smell"`
 	Severity          string  `json:"severity"`
 	Message           string  `json:"message"`
+	Confidence        float64 `json:"confidence,omitempty"`
 	FunctionUnderTest string  `json:"function_under_test,omitempty"`
 	Context           string  `json:"context,omitempty"`
 	Suggestion        string  `json:"suggestion,omitempty"`
@@ -39,6 +40,16 @@ type Finding struct {
 	Risk              float64 `json:"risk,omitempty"`
 	SevScore          float64 `json:"severity_score,omitempty"`
 	Gap               float64 `json:"gap,omitempty"`
+}
+
+// anyNonzero returns true iff some f in findings has fn(f) > 0.
+func anyNonzero(findings []Finding, fn func(Finding) float64) bool {
+	for _, f := range findings {
+		if fn(f) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func main() {
@@ -67,8 +78,34 @@ func main() {
 		f.Risk = riskScore(f.File)
 		f.SevScore = severityScore(f.Severity)
 		f.Gap = coverageGap(cov, f.FunctionUnderTest)
-		f.Priority = wRisk*f.Risk + wSev*f.SevScore + wGap*f.Gap
 		findings = append(findings, f)
+	}
+
+	// If no finding has a usable branch_gap (coverage data missing or
+	// 0 across the board — common on itest packages with build tags),
+	// renormalize the formula so risk and severity drive ordering
+	// instead of collapsing every finding into the same priority bucket.
+	if !anyNonzero(findings, func(f Finding) float64 { return f.Gap }) {
+		fmt.Fprintln(os.Stderr,
+			"warn: branch_gap is zero for all findings; renormalizing weights")
+		denom := wRisk + wSev
+		if denom > 0 {
+			wRisk /= denom
+			wSev /= denom
+			wGap = 0
+		}
+	}
+
+	for i := range findings {
+		f := &findings[i]
+		f.Priority = wRisk*f.Risk + wSev*f.SevScore + wGap*f.Gap
+		// Confidence (when set on the finding) attenuates priority so
+		// low-confidence detections rank below high-confidence ones at
+		// equal raw priority. A confidence of 0 effectively suppresses
+		// the finding — caller can choose to drop those.
+		if f.Confidence > 0 && f.Confidence < 1 {
+			f.Priority *= f.Confidence
+		}
 	}
 
 	sort.SliceStable(findings, func(i, j int) bool {
