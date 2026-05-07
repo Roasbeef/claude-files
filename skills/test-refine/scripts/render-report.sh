@@ -47,10 +47,34 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 DATE="$(date +'%Y-%m-%d %H:%M')"
+
+# Collapse identical (file, test_name, smell) findings into one entry,
+# keeping the highest-priority instance and tracking how many were
+# folded in. Avoids the "5 identical rows for one test" pattern from
+# the agent's PR-305 feedback.
+COLLAPSED="$(mktemp -t test-refine-collapsed.XXXXXX)"
+jq '
+  group_by([.file, .test_name, .smell])
+  | map(
+      (max_by(.priority // 0)) + {
+        _dup_count: length,
+        _all_lines: (map(.line) | unique | sort)
+      }
+    )
+  | sort_by(-(.priority // 0))
+' "$FINDINGS" > "$COLLAPSED"
+FINDINGS_RAW="$FINDINGS"
+FINDINGS="$COLLAPSED"
+
 TOTAL="$(jq 'length' "$FINDINGS")"
 H_COUNT="$(jq '[.[] | select(.severity == "H")] | length' "$FINDINGS")"
 M_COUNT="$(jq '[.[] | select(.severity == "M")] | length' "$FINDINGS")"
 L_COUNT="$(jq '[.[] | select(.severity == "L")] | length' "$FINDINGS")"
+
+# Confidence split (B): findings with confidence >= 0.7 are
+# "high-confidence". Lower-confidence findings need manual verification.
+HI_CONF="$(jq '[.[] | select((.confidence // 1.0) >= 0.7)] | length' "$FINDINGS")"
+LO_CONF="$(jq '[.[] | select((.confidence // 1.0) < 0.7)] | length' "$FINDINGS")"
 
 # Coverage summary line.
 COV_LINE="(coverage analysis skipped)"
@@ -79,7 +103,8 @@ cat <<HEADER
 
 ## Summary
 
-- **Total findings**: $TOTAL ($H_COUNT high, $M_COUNT medium, $L_COUNT low)
+- **Total findings**: $TOTAL ($H_COUNT high-severity, $M_COUNT medium, $L_COUNT low)
+- **Confidence**: $HI_CONF high-confidence, $LO_CONF need manual verification
 - $COV_LINE
 - $MUT_LINE
 
@@ -89,8 +114,8 @@ cat <<HEADER
 
 ## Top Findings
 
-| # | Priority | File:Line | Smell | Sev | Test | Message |
-|---|---|---|---|---|---|---|
+| # | Priority | Conf | File:Line | Smell | Sev | Test | Message |
+|---|---|---|---|---|---|---|---|
 HEADER
 
 jq -r --argjson top "$TOP" '
@@ -101,13 +126,14 @@ jq -r --argjson top "$TOP" '
   | [
       .idx,
       (.value.priority // 0 | . * 100 | floor / 100),
-      "\(.value.file):\(.value.line)",
+      ((.value.confidence // 1.0) | . * 100 | floor / 100),
+      "\(.value.file):\(.value.line)\(if (.value._dup_count // 1) > 1 then " (×\(.value._dup_count))" else "" end)",
       .value.smell,
       .value.severity,
       (.value.test_name // ""),
-      ((.value.message // "") | .[0:80])
+      ((.value.message // "") | .[0:70])
     ]
-  | "| \(.[0]) | \(.[1]) | \(.[2]) | \(.[3]) | \(.[4]) | \(.[5]) | \(.[6]) |"
+  | "| \(.[0]) | \(.[1]) | \(.[2]) | \(.[3]) | \(.[4]) | \(.[5]) | \(.[6]) | \(.[7]) |"
 ' "$FINDINGS"
 
 cat <<'DETAIL_HEADER'
@@ -127,6 +153,9 @@ jq -c --argjson top "$TOP" '.[:$top] | .[]' "$FINDINGS" | nl -ba | while IFS=$'\
     test_name="$(echo "$row" | jq -r '.test_name // ""')"
     fut="$(echo "$row"   | jq -r '.function_under_test // ""')"
     sugg="$(echo "$row"  | jq -r '.suggestion // ""')"
+    conf="$(echo "$row"  | jq -r '(.confidence // 1.0) | . * 100 | floor / 100')"
+    dups="$(echo "$row"  | jq -r '._dup_count // 1')"
+    all_lines="$(echo "$row" | jq -r '(._all_lines // [.line]) | join(", ")')"
     pri="$(echo "$row"   | jq -r '(.priority // 0) | . * 100 | floor / 100')"
 
     # Removal smells go in the dedicated section below; here we emit
@@ -140,13 +169,14 @@ jq -c --argjson top "$TOP" '.[:$top] | .[]' "$FINDINGS" | nl -ba | while IFS=$'\
 
     cat <<DETAIL
 
-### F$idx — \`$file:$line\` — $smell ($sev) — priority $pri
+### F$idx — \`$file:$line\` — $smell ($sev) — priority $pri, confidence $conf
 
 - [ ] **Apply fix**
 - **Test**: \`$test_name\`
 - **Function under test**: \`$fut\`
 - **Smell**: $msg
 ${sugg:+- **Suggestion**: $sugg}
+$( [[ "$dups" -gt 1 ]] && echo "- **Note**: $dups identical findings collapsed (lines: $all_lines)" )
 
 DETAIL
 done
@@ -224,5 +254,8 @@ Add \`--verify-mutations\` to re-run gremlins after fixes and confirm
 \`test_efficacy\` did not regress.
 APPLY_FOOTER
 } > "$OUTPUT"
+
+# Clean up the temp collapsed JSON; keep the original findings file.
+rm -f "$COLLAPSED"
 
 echo "Report written: $OUTPUT"

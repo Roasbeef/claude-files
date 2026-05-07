@@ -32,14 +32,15 @@ import (
 )
 
 type Finding struct {
-	File             string `json:"file"`
-	Line             int    `json:"line"`
-	TestName         string `json:"test_name,omitempty"`
-	Smell            string `json:"smell"`
-	Severity         string `json:"severity"`
-	Message          string `json:"message"`
-	FunctionUnderTest string `json:"function_under_test,omitempty"`
-	Suggestion       string `json:"suggestion,omitempty"`
+	File              string  `json:"file"`
+	Line              int     `json:"line"`
+	TestName          string  `json:"test_name,omitempty"`
+	Smell             string  `json:"smell"`
+	Severity          string  `json:"severity"`
+	Message           string  `json:"message"`
+	Confidence        float64 `json:"confidence,omitempty"`
+	FunctionUnderTest string  `json:"function_under_test,omitempty"`
+	Suggestion        string  `json:"suggestion,omitempty"`
 }
 
 func main() {
@@ -85,6 +86,9 @@ func main() {
 		}
 
 		// Concurrency: SUT uses goroutines/channels/sync? Tests must too.
+		// Heuristic: we don't know for certain a test is sequential
+		// (a test could call into another concurrent helper), so
+		// confidence is moderate.
 		if usesConcurrency(fn) && !anyTestUsesConcurrency(related) {
 			emit(Finding{
 				File:              fn.path,
@@ -92,12 +96,14 @@ func main() {
 				Smell:             "D-CONCURRENCY-MISSING",
 				Severity:          "M",
 				Message:           "SUT uses concurrency primitives; no test exercises concurrent calls",
+				Confidence:        0.6,
 				FunctionUnderTest: fnKey,
 				Suggestion:        "add a test that calls the SUT from multiple goroutines and runs with -race",
 			})
 		}
 
-		// Error path missing.
+		// Error path missing. High confidence — return type is
+		// directly observable.
 		if returnsError(fn.fn) && !anyTestAssertsErrorIs(related) {
 			emit(Finding{
 				File:              fn.path,
@@ -105,6 +111,7 @@ func main() {
 				Smell:             "D-ERR-PATH-MISSING",
 				Severity:          "M",
 				Message:           "SUT returns error; no test asserts on a specific error case",
+				Confidence:        0.9,
 				FunctionUnderTest: fnKey,
 				Suggestion:        "add tests using require.ErrorIs / require.ErrorAs against named sentinels",
 			})
@@ -119,6 +126,7 @@ func main() {
 					Smell:             "D-CTX-CANCEL-MISSING",
 					Severity:          "M",
 					Message:           "SUT takes context.Context; no test exercises cancellation",
+					Confidence:        0.8,
 					FunctionUnderTest: fnKey,
 					Suggestion:        "add a test using context.WithCancel and asserting context.Canceled",
 				})
@@ -130,6 +138,7 @@ func main() {
 					Smell:             "D-CTX-TIMEOUT-MISSING",
 					Severity:          "L",
 					Message:           "SUT takes context.Context; no test exercises a timeout",
+					Confidence:        0.8,
 					FunctionUnderTest: fnKey,
 					Suggestion:        "add a test using context.WithTimeout asserting context.DeadlineExceeded",
 				})
@@ -151,6 +160,7 @@ func main() {
 				Smell:             "D-PBT-CANDIDATE",
 				Severity:          "M",
 				Message:           fmt.Sprintf("%s/%s pair admits a roundtrip property", fn.fn.Name.Name, baseName(other)),
+				Confidence:        0.9,
 				FunctionUnderTest: fnKey,
 				Suggestion:        "use rapid to assert: " + roundtripFor(kind, fn.fn.Name.Name, baseName(other)),
 			})
@@ -433,6 +443,7 @@ func walkDeterminism(fset *token.FileSet, path string, file *ast.File, emit func
 						File: path, Line: pos, TestName: fn.Name.Name,
 						Smell: "D-DETERMINISM-CLOCK", Severity: "M",
 						Message:    "test reads time.Now() directly; non-deterministic",
+						Confidence: 0.9,
 						Suggestion: "inject a clock interface; use clock.NewMock() in tests",
 					})
 				}
@@ -444,6 +455,7 @@ func walkDeterminism(fset *token.FileSet, path string, file *ast.File, emit func
 						File: path, Line: pos, TestName: fn.Name.Name,
 						Smell: "D-DETERMINISM-RAND", Severity: "M",
 						Message:    "test uses package-level math/rand; not seeded for reproducibility",
+						Confidence: 0.9,
 						Suggestion: "use rand.New(rand.NewSource(seed)); print seed on failure for replay",
 					})
 				}
@@ -453,6 +465,7 @@ func walkDeterminism(fset *token.FileSet, path string, file *ast.File, emit func
 						File: path, Line: pos, TestName: fn.Name.Name,
 						Smell: "D-DETERMINISM-ENV", Severity: "L",
 						Message:    "test reads os.Getenv; depends on shell environment",
+						Confidence: 0.7,
 						Suggestion: "use t.Setenv to control the env, or pass the value through a struct",
 					})
 				}

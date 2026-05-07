@@ -23,14 +23,15 @@ import (
 )
 
 type Finding struct {
-	File       string `json:"file"`
-	Line       int    `json:"line"`
-	TestName   string `json:"test_name"`
-	Smell      string `json:"smell"`
-	Severity   string `json:"severity"`
-	Message    string `json:"message"`
-	Context    string `json:"context,omitempty"`
-	Suggestion string `json:"suggestion,omitempty"`
+	File       string  `json:"file"`
+	Line       int     `json:"line"`
+	TestName   string  `json:"test_name"`
+	Smell      string  `json:"smell"`
+	Severity   string  `json:"severity"`
+	Message    string  `json:"message"`
+	Confidence float64 `json:"confidence,omitempty"`
+	Context    string  `json:"context,omitempty"`
+	Suggestion string  `json:"suggestion,omitempty"`
 }
 
 type testEntry struct {
@@ -95,6 +96,10 @@ func main() {
 					peers = append(peers, n)
 				}
 			}
+			// Confidence is moderate: AST-normalized hashing is good
+			// at catching true duplicates but can also catch
+			// legitimate restart-variant tests that share a runner
+			// (see DEF1). Until DEF1 lands, surface as low-confidence.
 			_ = enc.Encode(Finding{
 				File:     e.file,
 				Line:     e.line,
@@ -103,6 +108,7 @@ func main() {
 				Severity: "M",
 				Message: fmt.Sprintf("structurally duplicate test of: %s",
 					strings.Join(peers, ", ")),
+				Confidence: 0.6,
 				Suggestion: "consolidate into a table-driven test, or delete duplicates",
 			})
 		}
