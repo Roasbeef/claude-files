@@ -1,0 +1,6 @@
+# S03 expected findings.
+17:S03:TestBoxSetGetEqual
+# Style-drift fires because manual-fail is the minority style in this
+# fixture (5 of 6 tests use require/assert). Genuine signal.
+24:S-STYLE-DRIFT:TestBoxSetGetManualFail
+24:S03:TestBoxSetGetManualFail

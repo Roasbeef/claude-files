@@ -1,0 +1,5 @@
+# S07: early return bypasses a subsequent assertion.
+18:S07:TestEarlyReturnBypassesAssert
+# TestEarlyReturnNoAssertAfter has no assert at all — that's S01, not
+# S07. Flag is correct, just under a different smell.
+25:S01:TestEarlyReturnNoAssertAfter

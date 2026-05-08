@@ -1,0 +1,8 @@
+# S08: structural duplicates flagged with full severity.
+11:S08:TestDupeA
+16:S08:TestDupeB
+24:S08:TestDupeRenamedC
+# Restart-variant siblings: same runner, different constant arg.
+# Demoted from removal candidate to "consider table-driving".
+40:S08-VARIANT:TestRunnerVariantA
+41:S08-VARIANT:TestRunnerVariantB

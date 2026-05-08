@@ -73,17 +73,39 @@ if [[ "$POST" -eq 1 ]]; then
         if [[ -s "$before" && -s "$after" ]] && command -v jq >/dev/null 2>&1; then
             ebefore="$(jq -r '.test_efficacy // 0' "$before")"
             eafter="$(jq -r '.test_efficacy // 0' "$after")"
-            delta="$(awk -v a="$eafter" -v b="$ebefore" 'BEGIN{printf "%.2f", a - b}')"
-            echo "test_efficacy: $ebefore% -> $eafter% (Δ $delta%)"
-            # Append to report.
-            {
-                echo
-                echo "## After Refinement ($(date +'%Y-%m-%d %H:%M'))"
-                echo
-                echo "| Metric | Before | After | Δ |"
-                echo "|---|---|---|---|"
-                echo "| test_efficacy | ${ebefore}% | ${eafter}% | ${delta}% |"
-            } >> "$REPORT"
+            tbefore="$(jq -r '.mutants_total // 0' "$before")"
+            tafter="$(jq -r '.mutants_total // 0' "$after")"
+            # When either side produced zero mutants, the comparison is
+            # not meaningful — report that explicitly instead of a
+            # misleading "Δ -X%" derived from 0/0.
+            if [[ "$tbefore" -eq 0 || "$tafter" -eq 0 ]]; then
+                echo "test_efficacy: $ebefore% -> $eafter% (mutants: $tbefore -> $tafter; comparison invalid: zero-mutant side)"
+                {
+                    echo
+                    echo "## After Refinement ($(date +'%Y-%m-%d %H:%M'))"
+                    echo
+                    echo "> ⚠ Mutation comparison invalid: one of the runs produced zero"
+                    echo "> mutants (before=$tbefore, after=$tafter). Re-run gremlins"
+                    echo "> manually to investigate before trusting these numbers."
+                    echo
+                    echo "| Metric | Before | After |"
+                    echo "|---|---|---|"
+                    echo "| test_efficacy | ${ebefore}% | ${eafter}% |"
+                    echo "| mutants_total | ${tbefore} | ${tafter} |"
+                } >> "$REPORT"
+            else
+                delta="$(awk -v a="$eafter" -v b="$ebefore" 'BEGIN{printf "%.2f", a - b}')"
+                echo "test_efficacy: $ebefore% -> $eafter% (Δ $delta%)"
+                {
+                    echo
+                    echo "## After Refinement ($(date +'%Y-%m-%d %H:%M'))"
+                    echo
+                    echo "| Metric | Before | After | Δ |"
+                    echo "|---|---|---|---|"
+                    echo "| test_efficacy | ${ebefore}% | ${eafter}% | ${delta}% |"
+                    echo "| mutants_total | ${tbefore} | ${tafter} | |"
+                } >> "$REPORT"
+            fi
         fi
     fi
     exit 0

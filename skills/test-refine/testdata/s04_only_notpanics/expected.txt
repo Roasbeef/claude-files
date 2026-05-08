@@ -1,0 +1,3 @@
+# S04: only assertion is NotPanics or recover-only.
+16:S04:TestOnlyNotPanics
+21:S04:TestOnlyDeferRecover

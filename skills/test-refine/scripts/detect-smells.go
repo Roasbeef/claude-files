@@ -393,7 +393,10 @@ func analyzeTestFunc(fset *token.FileSet, path string, fn *ast.FuncDecl, idx *pk
 	// S01: no assertions at all. Skip when the body is a single
 	// delegation to another function (standard "small body delegates
 	// to runner" pattern); the runner gets analyzed on its own merits.
-	if len(asserts) == 0 && !hasManualFail(body) && !isSingleDelegation(body) {
+	// Also skip when S04's recover-only pattern is detected — S04 is
+	// the more specific finding and double-flagging is noise.
+	if len(asserts) == 0 && !hasManualFail(body) && !isSingleDelegation(body) &&
+		!hasOnlyRecover(body) {
 		add(startLine, "S01", "H",
 			fmt.Sprintf("test %q runs code but has no assertion", fn.Name.Name), 1.0)
 	}
@@ -932,6 +935,14 @@ func findDiscardedErrors(fset *token.FileSet, body *ast.BlockStmt, idx *pkgIndex
 		if name == "" {
 			return true
 		}
+		// Skip Go builtins whose return is non-error. Discarding
+		// `recover()` / `len()` / `append()` is idiomatic, never an
+		// error-discard smell.
+		switch name {
+		case "recover", "len", "cap", "make", "new", "append",
+			"copy", "min", "max":
+			return true
+		}
 		// Apply package-index knowledge.
 		conf := 0.4 // unknown callee: low-confidence default.
 		known := idx != nil && idx.knownFuncs[name]
@@ -1145,9 +1156,28 @@ func findUnassertedSideEffect(fset *token.FileSet, body *ast.BlockStmt) (int, bo
 
 // isGetterSetterTrivial detects bodies that are exactly: New(); SetX(v); assert(GetX() == v).
 // Also recognizes `if c.GetX() != v { t.Errorf(...) }` form.
+//
+// Returns false when the body contains control flow (for/range/if/switch
+// other than the simple `if Get != v { fail }` form). A loop or branch
+// in the body almost always means the test is exercising real
+// behaviour, not just trivial setter/getter symmetry.
 func isGetterSetterTrivial(body *ast.BlockStmt) bool {
 	if len(body.List) > 5 {
 		return false
+	}
+	// Walk for unsupported control-flow shapes that signal real logic.
+	for _, s := range body.List {
+		switch v := s.(type) {
+		case *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt,
+			*ast.TypeSwitchStmt, *ast.SelectStmt:
+			return false
+		case *ast.IfStmt:
+			// Allow only the canonical `if c.GetX() != v { fail }`
+			// pattern; any other branching is real logic.
+			if !(v.Cond != nil && blockHasFailCall(v.Body)) {
+				return false
+			}
+		}
 	}
 	hasSet, hasGetCheck := false, false
 

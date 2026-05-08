@@ -1,0 +1,12 @@
+# S02 expected findings — line:smell:test_name
+# Each TP from fixture_test.go must appear here. FPs must NOT.
+16:S02:TestEqualSameVar
+21:S02:TestTrueLiteral
+26:S02:TestFalseLiteral
+33:S02:TestEqualSameSelectorChain
+# TestEqualSameSideEffectingCall: exprText("inc()") matches itself, so
+# detector currently flags both S02 and S10. Without type info we
+# cannot tell side-effecting from pure calls — accepting this as a
+# documented limitation, not a regression.
+63:S02:TestEqualSameSideEffectingCall
+63:S10:TestEqualSameSideEffectingCall

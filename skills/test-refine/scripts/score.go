@@ -115,6 +115,12 @@ func main() {
 
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
+	// Avoid emitting `null` when there are zero findings — downstream
+	// jq filters error with "Cannot iterate over null". An empty array
+	// is the correct neutral value.
+	if findings == nil {
+		findings = []Finding{}
+	}
 	_ = enc.Encode(findings)
 }
 

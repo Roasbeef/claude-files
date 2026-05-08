@@ -1,0 +1,7 @@
+# S10 fires when both args are calls to the same function. The same
+# match also trips S02 (tautology) because exprText is identical —
+# this is the documented limitation: without dataflow analysis the
+# detector cannot tell them apart. Both findings are useful — the
+# user gets two pointers at the same line.
+16:S02:TestExpectExpectedSameFn
+16:S10:TestExpectExpectedSameFn

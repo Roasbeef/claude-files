@@ -1,0 +1,5 @@
+# S11: pointer-passed mutation with no readback.
+# TestMutateNoReadback: TP for both S01 (no assertion) and S11 (mutation
+# unasserted). They're complementary, not duplicate.
+16:S01:TestMutateNoReadback
+18:S11:TestMutateNoReadback

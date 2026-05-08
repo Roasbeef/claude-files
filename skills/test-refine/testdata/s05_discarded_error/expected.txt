@@ -1,0 +1,10 @@
+# S05: only fires on TestDiscardErrorReturn (TP). All non-error and
+# builtin discards are correctly skipped. The S01 entries on the FPs
+# are because those fixtures genuinely have no assertion — orthogonal
+# to S05.
+17:S01:TestDiscardErrorReturn
+18:S05:TestDiscardErrorReturn
+23:S01:TestDiscardNonErrorTuple
+29:S01:TestDiscardThreeReturnsNoError
+35:S04:TestDiscardRecoverBuiltin
+40:S01:TestDiscardLenBuiltin

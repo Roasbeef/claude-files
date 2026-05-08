@@ -432,7 +432,20 @@ func (r *renderer) renderExpr(e ast.Expr) string {
 		for i, a := range v.Args {
 			args[i] = r.renderExpr(a)
 		}
-		return r.renderExpr(v.Fun) + "(" + strings.Join(args, ",") + ")"
+		// Render the callee specially: a bare ident in callee position
+		// is almost always a function (package-level or imported), not
+		// a local. Aliasing it would collapse calls to *different*
+		// runners into the same hash, producing false-positive S08
+		// findings on tests that delegate to distinct helpers. Keep
+		// the literal name.
+		var callee string
+		switch fn := v.Fun.(type) {
+		case *ast.Ident:
+			callee = fn.Name
+		default:
+			callee = r.renderExpr(v.Fun)
+		}
+		return callee + "(" + strings.Join(args, ",") + ")"
 
 	case *ast.BinaryExpr:
 		return r.renderExpr(v.X) + v.Op.String() + r.renderExpr(v.Y)
