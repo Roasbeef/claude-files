@@ -135,8 +135,13 @@ while IFS= read -r line; do
     fi
 done < "$REPORT"
 
-# Build action plan JSON.
-total=$(( ${#APPROVED_F[@]} + ${#APPROVED_REMOVE[@]} + ${#APPROVED_RESHAPE[@]} + ${#APPROVED_DOMAIN[@]} ))
+# Build action plan JSON. Bash with `set -u` errors on `${arr[@]}` when
+# the array was never appended to; guard with `:-` to default to empty.
+n_f=${#APPROVED_F[@]:-0}
+n_remove=${#APPROVED_REMOVE[@]:-0}
+n_reshape=${#APPROVED_RESHAPE[@]:-0}
+n_domain=${#APPROVED_DOMAIN[@]:-0}
+total=$(( n_f + n_remove + n_reshape + n_domain ))
 if [[ "$total" -eq 0 ]]; then
     cat <<EOF
 {
@@ -160,7 +165,8 @@ ENRICHED="$(jq "$JQ_PROG" "$FINDINGS")"
 # applied mechanically vs which need manual TODO comments.
 APPROVED_FULL="["
 first=1
-for f in "${APPROVED_F[@]}"; do
+for f in "${APPROVED_F[@]:-}"; do
+    [[ -z "$f" ]] && continue
     match="$(echo "$ENRICHED" | jq --arg id "$f" '.[] | select(.f_id == $id)')"
     [[ -z "$match" || "$match" == "null" ]] && continue
     if [[ "$first" -eq 0 ]]; then APPROVED_FULL+=","; fi
@@ -186,7 +192,8 @@ MANUAL_N="$(echo "$MANUAL" | jq 'length')"
     echo "  \"approved_manual\": $MANUAL,"
     echo "  \"approved_removals\": ["
     first=1
-    for r in "${APPROVED_REMOVE[@]}"; do
+    for r in "${APPROVED_REMOVE[@]:-}"; do
+        [[ -z "$r" ]] && continue
         if [[ "$first" -eq 0 ]]; then echo ","; fi
         echo -n "    $(printf '%s' "$r" | jq -R .)"
         first=0
@@ -195,7 +202,8 @@ MANUAL_N="$(echo "$MANUAL" | jq 'length')"
     echo "  ],"
     echo "  \"approved_reshapes\": ["
     first=1
-    for r in "${APPROVED_RESHAPE[@]}"; do
+    for r in "${APPROVED_RESHAPE[@]:-}"; do
+        [[ -z "$r" ]] && continue
         if [[ "$first" -eq 0 ]]; then echo ","; fi
         echo -n "    $(printf '%s' "$r" | jq -R .)"
         first=0
@@ -204,7 +212,8 @@ MANUAL_N="$(echo "$MANUAL" | jq 'length')"
     echo "  ],"
     echo "  \"approved_domain\": ["
     first=1
-    for r in "${APPROVED_DOMAIN[@]}"; do
+    for r in "${APPROVED_DOMAIN[@]:-}"; do
+        [[ -z "$r" ]] && continue
         if [[ "$first" -eq 0 ]]; then echo ","; fi
         echo -n "    $(printf '%s' "$r" | jq -R .)"
         first=0

@@ -35,14 +35,19 @@ The skill runs **read-only triage first**, produces a markdown report, then appl
 # Pin scope to a single file
 ~/.claude/skills/test-refine/scripts/triage.sh --scope file --target ./internal/wallet/wallet_test.go
 
-# Diff-scoped (changed test files in current branch vs main)
+# Diff-scoped (changed test files in current branch vs auto-detected
+# default branch — origin/HEAD, then main, then master).
 ~/.claude/skills/test-refine/scripts/triage.sh --scope diff
 
 # Whole repo (slow)
 ~/.claude/skills/test-refine/scripts/triage.sh --scope repo
 
-# With mutation testing for the strongest signal
+# With mutation testing for the strongest signal. Diff scope fans out
+# across the unique set of affected packages (capped by
+# MUTATION_FANOUT_CAP=5 by default; override via env var). Repo scope
+# hard-fails — narrow before re-trying.
 ~/.claude/skills/test-refine/scripts/triage.sh --scope package --use-mutations
+~/.claude/skills/test-refine/scripts/triage.sh --scope diff    --use-mutations
 ```
 
 The triage script:
@@ -98,15 +103,15 @@ Full catalog with Go examples in [`references/smell-catalog.md`](references/smel
 
 | ID | Smell | Severity |
 |---|---|---|
-| S01 | No assertions at all | High |
+| S01 | No assertions at all (recognises testify, helper-named functions, and `t.Run` subtests) | High |
 | S02 | Tautological assertion (`x == x`) | High |
 | S03 | Getter/setter trivial test | Medium |
 | S04 | Asserts no panic only | High |
 | S05 | Unchecked error from SUT | High |
-| S06 | Sensitive equality (asserts on `String()`) | Medium |
+| S06 | Sensitive equality on rendered text — `fmt.Sprint*` and non-canonical `.String()`. Skipped for canonical types (chainhash.Hash, UUID, big.Int, time.Time, OutPoint, etc.) | Medium |
 | S07 | Conditional/skipped assertion | Medium |
 | S08 | Duplicate test body (semantic) | Medium |
-| S09 | Assertion roulette (no messages) | Low |
+| S09 | Assertion roulette — only fires when ≥4 bare asserts share the same call+RHS shape and the test has ≥8 bare asserts; confidence 0.4 (advisory) | Low |
 | S10 | Expect-the-expected (`want` derived from `got`) | High |
 | S11 | Side-effect not asserted | Medium |
 | S12 | Mutation-survivor zone (gremlins data required) | High |
@@ -160,10 +165,11 @@ The committed markdown report lives at:
 
 Contents:
 
+- **Header banners**: warn when the data layer is incomplete (coverage = 0%, gremlins skipped) or when priority is severity-only because branch-gap is unavailable. The user sees this *before* trusting the ranking.
 - **Before metrics**: test count, assertion count, statement+branch coverage %, `test_efficacy` if mutation data available.
-- **Top-N findings table**: rank, file:line, smell, severity, proposed action.
-- **Per-function detail blocks**: weak-assertion → strong-assertion rewrites with side-by-side code.
-- **Domain-check section**: concurrency / failure-mode / PBT / determinism findings.
+- **Top-N findings table**: rank, priority, confidence, fix-kind, file:line, smell, severity, test → SUT. The full message is *not* in the table — it's in the per-finding detail block, so nothing gets truncated.
+- **Per-finding detail block**: smell, suggestion, an `Apply fix` checkbox, a `False positive — won't fix` checkbox (so disagreement is recordable across re-runs), and a collapsible `<details>` block with the test function body so the reviewer can sanity-check without context-switching to the source file.
+- **Domain-check section**: concurrency / failure-mode / PBT / determinism findings. Runs for *all* scopes (package, file, diff, repo) — the diff-scope variant fans out across the unique set of affected package directories.
 - **Removal candidates list**: each with one-line justification and explicit checkbox.
 - **PBT conversion candidates**: specific functions + property sketch using `rapid`.
 - **(After fixes)** "After" metrics appended to the same file.

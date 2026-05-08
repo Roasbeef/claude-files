@@ -23,12 +23,16 @@ SCOPE=""
 SLUG=""
 OUTPUT=""
 TOP=30
+COV_REQUESTED=0
+MUT_REQUESTED=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --findings) FINDINGS="$2"; shift 2 ;;
         --coverage) COVERAGE="$2"; shift 2 ;;
         --gremlins) GREMLINS="$2"; shift 2 ;;
+        --coverage-requested) COV_REQUESTED=1; shift ;;
+        --mutations-requested) MUT_REQUESTED=1; shift ;;
         --scope) SCOPE="$2"; shift 2 ;;
         --slug) SLUG="$2"; shift 2 ;;
         --output) OUTPUT="$2"; shift 2 ;;
@@ -50,8 +54,8 @@ DATE="$(date +'%Y-%m-%d %H:%M')"
 
 # Collapse identical (file, test_name, smell) findings into one entry,
 # keeping the highest-priority instance and tracking how many were
-# folded in. Avoids the "5 identical rows for one test" pattern from
-# the agent's PR-305 feedback.
+# folded in. Avoids "N identical rows for one test" patterns where a
+# single helper produces several findings at distinct line numbers.
 COLLAPSED="$(mktemp -t test-refine-collapsed.XXXXXX)"
 jq '
   group_by([.file, .test_name, .smell])
@@ -82,21 +86,36 @@ LO_CONF="$(jq '[.[] | select((.confidence // 1.0) < 0.7)] | length' "$FINDINGS")
 AUTO_FIX="$(jq '[.[] | select((.fix_kind // "manual") == "auto")] | length' "$FINDINGS")"
 MANUAL_FIX="$(jq '[.[] | select((.fix_kind // "manual") != "auto")] | length' "$FINDINGS")"
 
-# Coverage summary line.
+# Coverage summary line + data-quality flag.
 COV_LINE="(coverage analysis skipped)"
+COV_BROKEN=0
 if [[ -n "$COVERAGE" && -s "$COVERAGE" ]]; then
     total="$(grep '^total:' "$COVERAGE" | awk '{print $NF}')"
-    [[ -n "$total" ]] && COV_LINE="**Statement coverage**: $total"
+    if [[ -n "$total" ]]; then
+        COV_LINE="**Statement coverage**: $total"
+        # 0.0% with coverage requested almost always means the build
+        # failed and the script swallowed the error. Flag it.
+        if [[ "$total" == "0.0%" && "$COV_REQUESTED" -eq 1 ]]; then
+            COV_BROKEN=1
+        fi
+    fi
+elif [[ "$COV_REQUESTED" -eq 1 ]]; then
+    COV_LINE="**Statement coverage**: data missing (coverage step failed)"
+    COV_BROKEN=1
 fi
 
-# Gremlins summary.
+# Gremlins summary + data-quality flag.
 MUT_LINE="(mutation testing not run)"
+MUT_BROKEN=0
 if [[ -n "$GREMLINS" && -s "$GREMLINS" ]]; then
     eff="$(jq -r '.test_efficacy // 0' "$GREMLINS")"
     cov="$(jq -r '.mutations_coverage // 0' "$GREMLINS")"
     killed="$(jq -r '.mutants_killed // 0' "$GREMLINS")"
     lived="$(jq -r '.mutants_lived // 0' "$GREMLINS")"
     MUT_LINE="**Mutation testing**: efficacy=${eff}%, coverage=${cov}%, killed=${killed}, lived=${lived}"
+elif [[ "$MUT_REQUESTED" -eq 1 ]]; then
+    MUT_LINE="**Mutation testing**: data missing (gremlins requested but produced no output)"
+    MUT_BROKEN=1
 fi
 
 # Pre-flight sampler banner (DEF4): on a sample of the top findings,
@@ -112,13 +131,54 @@ if [[ "$SAMPLE_SIZE" -gt 0 ]]; then
     # Threshold: < 60% (i.e., fewer than 3 of 5).
     threshold=$(( SAMPLE_SIZE * 60 / 100 ))
     if [[ "$PLAUSIBLE" -lt "$threshold" ]]; then
-        BANNER="
+        BANNER+="
 > ⚠ **Spot-check warning**: only $PLAUSIBLE of the top $SAMPLE_SIZE findings are
 > high-confidence. The report likely has a high false-positive rate.
 > Manually verify each finding before acting; consider re-running with
 > a narrower scope or with --use-mutations for stronger signal.
 "
     fi
+fi
+
+# Data-layer warnings: coverage and/or gremlins were requested but
+# produced no usable signal. Priority scores collapse to severity-only
+# under these conditions, so the user must know not to trust the ranks.
+# Branch-gap degraded: every finding has gap==0. Same effective signal
+# as the score.go renormalize warning, but surfaced where users see it.
+GAP_DEGRADED=0
+if [[ "$TOTAL" -gt 0 ]]; then
+    NONZERO_GAP="$(jq '[.[] | select((.gap // 0) > 0)] | length' "$FINDINGS")"
+    if [[ "$NONZERO_GAP" -eq 0 ]]; then
+        GAP_DEGRADED=1
+    fi
+fi
+if [[ "$GAP_DEGRADED" -eq 1 ]]; then
+    BANNER+="
+> ⚠ **Priority is severity-only**: branch-gap data was unavailable for
+> every finding (coverage probably didn't link function names to
+> production sources). Priority numbers are derived from path-risk and
+> severity alone — different findings with the same severity will
+> share priority. Treat the ranking as coarse.
+"
+fi
+
+if [[ "$COV_BROKEN" -eq 1 || "$MUT_BROKEN" -eq 1 ]]; then
+    BANNER+="
+> ⚠ **Data layer was incomplete**:"
+    [[ "$COV_BROKEN" -eq 1 ]] && BANNER+="
+> - Coverage data is missing or 0.0% across the board. Most likely the
+>   \`go test -cover\` step failed to build (uninitialised submodules,
+>   missing build tags, etc.). The branch-gap component of priority is
+>   noise on this run."
+    [[ "$MUT_BROKEN" -eq 1 ]] && BANNER+="
+> - Mutation data is missing despite \`--use-mutations\`. Gremlins
+>   either failed to install, failed to download dependencies, or was
+>   silently dropped (e.g. on diff/repo scope). S12 findings will not
+>   appear; trust mutation-derived priority cautiously."
+    BANNER+="
+>
+> Treat priority numbers as advisory rather than authoritative for this report.
+"
 fi
 
 {
@@ -143,8 +203,11 @@ $BANNER
 
 ## Top Findings
 
-| # | Priority | Conf | Fix | File:Line | Smell | Sev | Test | Message |
-|---|---|---|---|---|---|---|---|---|
+Full message + suggestion + test body are in the detail block for each
+finding below (\`F\${n}\`). The table is for at-a-glance scanning only.
+
+| # | Priority | Conf | Fix | File:Line | Smell | Sev | Test / SUT |
+|---|---|---|---|---|---|---|---|
 HEADER
 
 jq -r --argjson top "$TOP" '
@@ -160,10 +223,16 @@ jq -r --argjson top "$TOP" '
       "\(.value.file):\(.value.line)\(if (.value._dup_count // 1) > 1 then " (×\(.value._dup_count))" else "" end)",
       .value.smell,
       .value.severity,
-      (.value.test_name // ""),
-      ((.value.message // "") | .[0:70])
+      (
+        if (.value.test_name // "") != "" and (.value.function_under_test // "") != ""
+        then "\(.value.test_name) → \(.value.function_under_test)"
+        elif (.value.test_name // "") != ""
+        then .value.test_name
+        else (.value.function_under_test // "")
+        end
+      )
     ]
-  | "| \(.[0]) | \(.[1]) | \(.[2]) | \(.[3]) | \(.[4]) | \(.[5]) | \(.[6]) | \(.[7]) | \(.[8]) |"
+  | "| \(.[0]) | \(.[1]) | \(.[2]) | \(.[3]) | \(.[4]) | \(.[5]) | \(.[6]) | \(.[7]) |"
 ' "$FINDINGS"
 
 cat <<'DETAIL_HEADER'
@@ -171,6 +240,26 @@ cat <<'DETAIL_HEADER'
 ## Findings (Apply Approved)
 
 DETAIL_HEADER
+
+# extract_test_body prints the test function (or surrounding 30 lines)
+# from the source file as a numbered code block. Heuristic: starts at
+# the finding's line and stops at the first `^}` (column-0 closing
+# brace) or 30 lines, whichever comes first.
+extract_test_body() {
+    local file="$1" start="$2" max=30
+    [[ -z "$file" || -z "$start" ]] && return 0
+    [[ -f "$file" ]] || return 0
+    awk -v start="$start" -v max="$max" '
+      NR >= start {
+        printed++
+        # Print line number (right-padded width 5) + content.
+        printf "%5d  %s\n", NR, $0
+        # Stop at column-0 closing brace (top-level fn end) or budget.
+        if ($0 ~ /^}/ && printed > 1) exit
+        if (printed >= max) { print "       ... (truncated)"; exit }
+      }
+    ' "$file"
+}
 
 # Detail blocks for each finding.
 jq -c --argjson top "$TOP" '.[:$top] | .[]' "$FINDINGS" | nl -ba | while IFS=$'\t' read -r num row; do
@@ -197,17 +286,26 @@ jq -c --argjson top "$TOP" '.[:$top] | .[]' "$FINDINGS" | nl -ba | while IFS=$'\
             ;;
     esac
 
+    body_block=""
+    if [[ -f "$file" ]]; then
+        body_text="$(extract_test_body "$file" "$line")"
+        if [[ -n "$body_text" ]]; then
+            body_block=$'\n<details><summary>show test body</summary>\n\n```go\n'"$body_text"$'\n```\n\n</details>\n'
+        fi
+    fi
+
     cat <<DETAIL
 
 ### F$idx — \`$file:$line\` — $smell ($sev) — priority $pri, confidence $conf
 
 - [ ] **Apply fix**
+- [ ] **False positive — won't fix** (record disagreement; survives across re-runs)
 - **Test**: \`$test_name\`
 - **Function under test**: \`$fut\`
 - **Smell**: $msg
 ${sugg:+- **Suggestion**: $sugg}
 $( [[ "$dups" -gt 1 ]] && echo "- **Note**: $dups identical findings collapsed (lines: $all_lines)" )
-
+$body_block
 DETAIL
 done
 

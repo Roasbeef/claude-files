@@ -43,7 +43,8 @@ Usage: $0 [--scope file|package|diff|repo] [options]
                        repo              - whole module
   --target PATH      Target file (with --scope file).
   --pkg PATH         Package path (with --scope package). Default: '.'.
-  --base BRANCH      Base branch (with --scope diff). Default: 'main'.
+  --base BRANCH      Base branch (with --scope diff). Default: auto-detect
+                     via origin/HEAD, falling back to main, then master.
   --use-mutations    Run gremlins to feed S12 (mutation-survivor) findings.
   --weights SPEC     Override score weights, e.g. risk=0.6,severity=0.3,gap=0.1.
   --no-coverage      Skip coverage analysis (faster, less signal).
@@ -57,7 +58,27 @@ EOF
 SCOPE="package"
 TARGET=""
 PKG="."
-BASE="main"
+# BASE auto-detect: probe the remote default branch first, fall back to
+# whichever common name actually exists locally, finally to "main".
+# Many repos use "master"; the previous hardcoded "main" silently emitted
+# wrong/empty diffs.
+detect_base_branch() {
+    local b
+    if b="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)"; then
+        echo "${b#origin/}"
+        return
+    fi
+    if git rev-parse --verify --quiet refs/heads/main >/dev/null 2>&1 ||
+       git rev-parse --verify --quiet refs/remotes/origin/main >/dev/null 2>&1; then
+        echo "main"; return
+    fi
+    if git rev-parse --verify --quiet refs/heads/master >/dev/null 2>&1 ||
+       git rev-parse --verify --quiet refs/remotes/origin/master >/dev/null 2>&1; then
+        echo "master"; return
+    fi
+    echo "main"
+}
+BASE=""
 USE_MUTATIONS=0
 WEIGHTS="risk=0.5,severity=0.3,gap=0.2"
 DO_COVERAGE=1
@@ -91,6 +112,10 @@ case "$SCOPE" in
         )
         ;;
     diff)
+        if [[ -z "$BASE" ]]; then
+            BASE="$(detect_base_branch)"
+            echo "info: auto-detected base branch: $BASE" >&2
+        fi
         while IFS= read -r f; do
             [[ -n "$f" && -f "$f" ]] && TEST_FILES+=("$f")
         done < <(git diff --name-only "$BASE...HEAD" -- '*_test.go' || true)
@@ -183,21 +208,92 @@ if [[ "$DO_COVERAGE" -eq 1 ]]; then
 fi
 
 # --- Step 2: optional gremlins ---
+# Fanout policy: --scope package runs gremlins on the one package. file
+# scope runs on the file's containing package. diff scope fans out
+# across the unique set of in-scope package directories, capped by
+# MUTATION_FANOUT_CAP (default 5) since each package costs minutes.
+# repo scope hard-fails — the time cost is unbounded, the user should
+# narrow scope.
+MUTATION_FANOUT_CAP="${MUTATION_FANOUT_CAP:-5}"
 if [[ "$USE_MUTATIONS" -eq 1 ]]; then
-    if command -v gremlins >/dev/null 2>&1; then
-        echo "Running gremlins..."
-        case "$SCOPE" in
-            package)
-                "$HOME/.claude/skills/mutation-testing/scripts/unleash.sh" \
-                    --pkg "$PKG" --output "$GREMLINS_OUT" --silent || true
-                ;;
-            file|diff|repo)
-                echo "warn: --use-mutations only supported with --scope package; skipping" >&2
-                ;;
-        esac
-    else
+    if ! command -v gremlins >/dev/null 2>&1; then
         echo "warn: gremlins not installed; skipping mutation analysis" >&2
         echo "      install via ~/.claude/skills/mutation-testing/scripts/install-gremlins.sh" >&2
+    else
+        echo "Running gremlins..."
+        run_gremlins_for_pkg() {
+            local pkg="$1" out="$2"
+            "$HOME/.claude/skills/mutation-testing/scripts/unleash.sh" \
+                --pkg "$pkg" --output "$out" --silent || true
+        }
+        case "$SCOPE" in
+            package)
+                run_gremlins_for_pkg "$PKG" "$GREMLINS_OUT"
+                ;;
+            file)
+                run_gremlins_for_pkg "$(dirname "$TARGET")" "$GREMLINS_OUT"
+                ;;
+            diff)
+                MUT_PKGS="$(printf '%s\n' "${TEST_FILES[@]}" | xargs -n1 dirname | sort -u)"
+                MUT_PKG_COUNT="$(printf '%s' "$MUT_PKGS" | grep -c . || true)"
+                if [[ "$MUT_PKG_COUNT" -gt "$MUTATION_FANOUT_CAP" ]]; then
+                    echo "warn: $MUT_PKG_COUNT diff packages exceeds MUTATION_FANOUT_CAP=$MUTATION_FANOUT_CAP." >&2
+                    echo "      Truncating to first $MUTATION_FANOUT_CAP. Override with MUTATION_FANOUT_CAP=N." >&2
+                fi
+                MERGED_TMP="$(mktemp -t test-refine-grem-merge.XXXXXX)"
+                echo '{"files":[]}' > "$MERGED_TMP"
+                processed=0
+                while IFS= read -r dir; do
+                    [[ -n "$dir" && -d "$dir" ]] || continue
+                    if [[ "$processed" -ge "$MUTATION_FANOUT_CAP" ]]; then
+                        break
+                    fi
+                    pkg_slug="$(echo "$dir" | tr '/.' '_' | sed 's/^_*//')"
+                    per_out="$FINDINGS_DIR/$SLUG-gremlins-$pkg_slug.json"
+                    echo "  gremlins: $dir -> $per_out"
+                    run_gremlins_for_pkg "$dir" "$per_out"
+                    if [[ -s "$per_out" ]]; then
+                        # Merge files[] arrays; the aggregate top-level
+                        # stats are recomputed below.
+                        jq -s '
+                          .[0].files += (.[1].files // [])
+                          | .[0]
+                        ' "$MERGED_TMP" "$per_out" > "$MERGED_TMP.next" \
+                            && mv "$MERGED_TMP.next" "$MERGED_TMP"
+                    fi
+                    processed=$((processed + 1))
+                done <<< "$MUT_PKGS"
+                # Recompute aggregate stats from merged file list.
+                if [[ -s "$MERGED_TMP" ]]; then
+                    jq '
+                      . as $r
+                      | .files as $fs
+                      | .mutants_killed = (
+                          [$fs[].mutations[]? | select(.status=="KILLED")] | length
+                        )
+                      | .mutants_lived = (
+                          [$fs[].mutations[]? | select(.status=="LIVED")] | length
+                        )
+                      | .mutants_total = (
+                          [$fs[].mutations[]?] | length
+                        )
+                      | .test_efficacy = (
+                          if .mutants_total > 0
+                          then (.mutants_killed * 100 / .mutants_total)
+                          else 0
+                          end
+                        )
+                      | .mutations_coverage = .test_efficacy
+                    ' "$MERGED_TMP" > "$GREMLINS_OUT" || cp "$MERGED_TMP" "$GREMLINS_OUT"
+                fi
+                rm -f "$MERGED_TMP"
+                ;;
+            repo)
+                echo "error: --use-mutations with --scope repo is unbounded in time cost." >&2
+                echo "       Re-run with --scope diff or --scope package." >&2
+                exit 2
+                ;;
+        esac
     fi
 fi
 
@@ -211,7 +307,20 @@ SCORE_BIN="$(build_analyzer "$SCRIPTS/score.go")"
 # --- Step 3: AST analysis ---
 echo "Detecting smells..."
 SMELLS_RAW="$(mktemp -t test-refine-smells.XXXXXX)"
-"$SMELLS_BIN" "${TEST_FILES[@]}" > "$SMELLS_RAW"
+# Pass production .go files alongside test files so the detector can
+# resolve "function under test" labels via the package-wide function
+# index. Without these, SUT-name matching has no production symbols.
+PROD_FILES=()
+while IFS= read -r f; do
+    [[ -n "$f" && -f "$f" ]] && PROD_FILES+=("$f")
+done < <(
+    printf '%s\n' "${TEST_FILES[@]}" | xargs -n1 dirname | sort -u | \
+        while IFS= read -r d; do
+            find "$d" -maxdepth 1 -type f -name '*.go' \
+                ! -name '*_test.go' 2>/dev/null
+        done
+)
+"$SMELLS_BIN" "${TEST_FILES[@]}" "${PROD_FILES[@]}" > "$SMELLS_RAW"
 
 echo "Detecting duplicates..."
 DUPES_RAW="$(mktemp -t test-refine-dupes.XXXXXX)"
@@ -219,13 +328,28 @@ DUPES_RAW="$(mktemp -t test-refine-dupes.XXXXXX)"
 
 echo "Domain checks..."
 DOMAIN_RAW="$(mktemp -t test-refine-domain.XXXXXX)"
+: > "$DOMAIN_RAW"
 case "$SCOPE" in
     package)
-        "$DOMAIN_BIN" --pkg "$PKG" > "$DOMAIN_RAW" || true ;;
+        "$DOMAIN_BIN" --pkg "$PKG" >> "$DOMAIN_RAW" || true ;;
     file)
-        "$DOMAIN_BIN" --pkg "$(dirname "$TARGET")" > "$DOMAIN_RAW" || true ;;
+        "$DOMAIN_BIN" --pkg "$(dirname "$TARGET")" >> "$DOMAIN_RAW" || true ;;
+    diff|repo)
+        # Fan out across the unique set of package directories that
+        # contain in-scope test files. Domain checks are the most
+        # actionable signal in the entire skill (D-ERR-PATH-MISSING,
+        # D-CTX-CANCEL-MISSING, D-PBT-STATE-MACHINE) — silently
+        # skipping them on diff/repo scopes was the single largest
+        # functional gap in the previous revision.
+        DOMAIN_PKGS="$(printf '%s\n' "${TEST_FILES[@]}" | xargs -n1 dirname | sort -u)"
+        DOMAIN_PKG_COUNT="$(printf '%s' "$DOMAIN_PKGS" | grep -c . || true)"
+        echo "  fanning out domain checks across $DOMAIN_PKG_COUNT package(s)..."
+        while IFS= read -r dir; do
+            [[ -n "$dir" && -d "$dir" ]] || continue
+            "$DOMAIN_BIN" --pkg "$dir" >> "$DOMAIN_RAW" || true
+        done <<< "$DOMAIN_PKGS"
+        ;;
     *)
-        : > "$DOMAIN_RAW"
         echo "info: domain checks skipped for scope=$SCOPE" >&2
         ;;
 esac
@@ -260,13 +384,17 @@ fi
 
 # --- Step 6: render report ---
 echo "Rendering report..."
-"$SCRIPTS/render-report.sh" \
-    --findings "$FINDINGS" \
-    --coverage "$COV_OUT" \
-    --gremlins "$GREMLINS_OUT" \
-    --scope "$SCOPE" \
-    --slug "$SLUG" \
-    --output "$REPORT"
+RENDER_ARGS=(
+    --findings "$FINDINGS"
+    --coverage "$COV_OUT"
+    --gremlins "$GREMLINS_OUT"
+    --scope   "$SCOPE"
+    --slug    "$SLUG"
+    --output  "$REPORT"
+)
+[[ "$DO_COVERAGE" -eq 1 ]] && RENDER_ARGS+=( --coverage-requested )
+[[ "$USE_MUTATIONS" -eq 1 ]] && RENDER_ARGS+=( --mutations-requested )
+"$SCRIPTS/render-report.sh" "${RENDER_ARGS[@]}"
 
 # Cleanup tmp files (keep the FINDINGS_DIR ones).
 rm -f "$SMELLS_RAW" "$DUPES_RAW" "$DOMAIN_RAW" "$ALL_RAW"
