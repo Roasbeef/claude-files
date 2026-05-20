@@ -1,6 +1,6 @@
 ---
 name: test-refine
-description: Refines an existing Go test suite — removes trivial/duplicate tests, strengthens weak assertions, reshapes tests around invariants, and closes branch-coverage gaps. Uses code-guided coverage and (when available) gremlins mutation-testing survivor data rather than relying on line coverage alone. Use when test quality is uneven, after a test-generation pass, before opening a PR, or as a quality gate on critical paths (consensus, channel state, payment flows). Triggers: "refine these tests", "tests are bloated", "tighten assertions", "remove trivial tests", "audit test quality", "/test-refine".
+description: 'Refines an existing Go test suite — removes trivial/duplicate tests, strengthens weak assertions, reshapes tests around invariants, and closes branch-coverage gaps. Uses code-guided coverage and (when available) gremlins mutation-testing survivor data rather than relying on line coverage alone. Use when test quality is uneven, after a test-generation pass, before opening a PR, or as a quality gate on critical paths (consensus, channel state, payment flows). Triggers: "refine these tests", "tests are bloated", "tighten assertions", "remove trivial tests", "audit test quality", "/test-refine".'
 ---
 
 # Test Refine

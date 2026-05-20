@@ -1,3 +1,8 @@
+---
+name: lnget
+description: Use lnget to fetch resources from L402-protected URLs that require Lightning payments. Covers basic fetching, payment limits (max cost, max routing fee), token cache management, and Lightning backend status. Use when an HTTP request returns 402 Payment Required and a Lightning micropayment is needed, or when downloading files behind a Lightning paywall.
+---
+
 # lnget Skill
 
 Use lnget to fetch resources that require L402 Lightning payments.

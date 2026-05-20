@@ -1,6 +1,6 @@
 ---
 name: mutation-testing
-description: Validates Go test suite quality through mutation testing using go-gremlins/gremlins. Mutates production code, runs the test suite against each mutant, and reports which mutants the tests fail to kill — exposing weak assertions that line coverage cannot detect. Use when evaluating test effectiveness, validating newly written tests, or improving test quality for mission-critical code (consensus, channel state, payment flows, crypto). Triggers: "mutation test", "are these tests strong", "validate test quality", "/mutation-testing".
+description: 'Validates Go test suite quality through mutation testing using go-gremlins/gremlins. Mutates production code, runs the test suite against each mutant, and reports which mutants the tests fail to kill — exposing weak assertions that line coverage cannot detect. Use when evaluating test effectiveness, validating newly written tests, or improving test quality for mission-critical code (consensus, channel state, payment flows, crypto). Triggers: "mutation test", "are these tests strong", "validate test quality", "/mutation-testing".'
 ---
 
 # Mutation Testing
