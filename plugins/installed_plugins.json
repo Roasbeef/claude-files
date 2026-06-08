@@ -4,11 +4,11 @@
     "code-review@claude-plugins-official": [
       {
         "scope": "user",
-        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/code-review/ab8d903331a8",
-        "version": "ab8d903331a8",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/code-review/1daa3610baf2",
+        "version": "1daa3610baf2",
         "installedAt": "2025-12-28T03:19:16.402Z",
-        "lastUpdated": "2026-03-25T08:00:34.887Z",
-        "gitCommitSha": "51437a45cafcb760b17c747fa1c4ae9872dce503"
+        "lastUpdated": "2026-06-01T19:18:15.884Z",
+        "gitCommitSha": "1daa3610baf294c814343306da045c3772094d61"
       }
     ],
     "typescript-lsp@claude-plugins-official": [
@@ -45,21 +45,21 @@
     "frontend-design@claude-plugins-official": [
       {
         "scope": "user",
-        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/frontend-design/ab8d903331a8",
-        "version": "ab8d903331a8",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/frontend-design/1daa3610baf2",
+        "version": "1daa3610baf2",
         "installedAt": "2026-01-25T05:40:38.055Z",
-        "lastUpdated": "2026-03-25T08:00:34.888Z",
-        "gitCommitSha": "e30768372b4150ca1bc0839d93283e8edc30d60d"
+        "lastUpdated": "2026-06-01T19:18:15.883Z",
+        "gitCommitSha": "1daa3610baf294c814343306da045c3772094d61"
       }
     ],
     "playground@claude-plugins-official": [
       {
         "scope": "user",
-        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/playground/ab8d903331a8",
-        "version": "ab8d903331a8",
+        "installPath": "/Users/roasbeef/.claude/plugins/cache/claude-plugins-official/playground/1daa3610baf2",
+        "version": "1daa3610baf2",
         "installedAt": "2026-02-18T01:46:30.602Z",
-        "lastUpdated": "2026-03-25T08:00:34.889Z",
-        "gitCommitSha": "261ce4fba4f2c314c490302158909a32e5889c88"
+        "lastUpdated": "2026-06-01T19:18:15.884Z",
+        "gitCommitSha": "1daa3610baf294c814343306da045c3772094d61"
       }
     ],
     "gh-cli@trailofbits": [
