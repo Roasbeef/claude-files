@@ -1,17 +1,26 @@
 #!/bin/bash
-# Subtrate Stop hook - Mail-First Persistent Agent Pattern
+# Subtrate Stop hook - Arm-Once Watcher Pattern
+#
+# The persistence model is the background watcher (`substrate watch`),
+# not the Stop hook. The watcher runs as a Claude Code background task;
+# when mail arrives it exits, and the harness re-invokes the agent with
+# the digest. The Stop hook's only job is to make sure a watcher is
+# armed before the agent goes idle.
 #
 # Priority order:
-# 1. Quick mail check - if mail exists, block immediately
-# 2. Check Tasks - if incomplete tasks exist, block immediately
-# 3. Long poll - keep agent alive, continuously checking for work
-#
-# Key behaviors:
-# - Checks mail before tasks (mail is more actionable)
-# - Long-polls for 9m30s (under 10m hook timeout)
-# - Always outputs {"decision": "block"} to stay alive
-# - User can force exit with Ctrl+C (bypasses hooks)
-# - No automated status/diff messages (see issue #78)
+# 1. Quick mail check - if mail exists, block with the digest (the agent
+#    will read mail via tool calls, which resets Claude Code's
+#    consecutive-block counter).
+# 2. If a watcher is armed, allow exit - the agent will be woken by the
+#    watcher's exit notification when there is work.
+# 3. If stop_hook_active is true, allow exit - we already nudged once
+#    this stop cycle. This respects the Claude Code 2.1.143+ cap on
+#    consecutive Stop hook blocks (default 8). This check runs AFTER
+#    the armed check so a mail block earlier in the turn (which sets
+#    stop_hook_active for the rest of the turn) cannot suppress the
+#    arming nudge and strand the agent without a watcher.
+# 4. Otherwise block ONCE with arming instructions (folding in a
+#    reminder about incomplete tasks, if any).
 #
 # Output format: JSON for Stop hook decision
 
@@ -20,10 +29,12 @@ input=$(cat)
 session_id=$(echo "$input" | jq -r '.session_id // empty')
 stop_hook_active=$(echo "$input" | jq -r '.stop_hook_active // false')
 
-# Build session ID args if available (critical for agent identity resolution).
-session_args=""
+# Build session ID args if available (critical for agent identity
+# resolution). Use a bash array so a session_id containing whitespace
+# or glob metacharacters cannot word-split or expand into extra args.
+session_args=()
 if [ -n "$session_id" ]; then
-    session_args="--session-id $session_id"
+    session_args=(--session-id "$session_id")
 fi
 
 # ============================================================================
@@ -31,10 +42,10 @@ fi
 # ============================================================================
 
 # Record heartbeat (best effort)
-substrate heartbeat $session_args --format context 2>/dev/null || true
+substrate heartbeat "${session_args[@]}" --format context 2>/dev/null || true
 
 # Quick (non-blocking) check for mail
-quick_result=$(substrate poll $session_args --format hook --quiet 2>/dev/null || echo '{"decision": null}')
+quick_result=$(substrate poll "${session_args[@]}" --format hook --quiet 2>/dev/null || echo '{}')
 quick_decision=$(echo "$quick_result" | jq -r '.decision // empty')
 
 if [ "$quick_decision" = "block" ]; then
@@ -44,31 +55,33 @@ if [ "$quick_decision" = "block" ]; then
 fi
 
 # ============================================================================
-# Step 2: Check for incomplete tasks
+# Step 2: If a watcher is armed, exit cleanly
 # ============================================================================
 
-# Function to count incomplete tasks for a session.
-count_incomplete_tasks() {
-    local task_dir="$HOME/.claude/tasks/$1"
+# Note: allow is an empty object — newer Claude Code rejects
+# {"decision": null}.
+if substrate watch --check "${session_args[@]}" >/dev/null 2>&1; then
+    echo '{}'
+    exit 0
+fi
 
-    if [ ! -d "$task_dir" ]; then
-        echo "0"
-        return
-    fi
+# ============================================================================
+# Step 3: Respect stop_hook_active - never block twice in a row
+# ============================================================================
 
-    local count=0
-    for task_file in "$task_dir"/*.json; do
-        [ -f "$task_file" ] || continue
+# stop_hook_active=true means Claude is stopping after a previous block
+# this turn. No watcher is armed at this point (step 2 fell through),
+# but we already had our chance to nudge; allow exit rather than
+# accumulate consecutive blocks. The next user prompt or session start
+# re-nudges.
+if [ "$stop_hook_active" = "true" ]; then
+    echo '{}'
+    exit 0
+fi
 
-        # Check if status is not "completed"
-        local status=$(jq -r '.status // "pending"' "$task_file" 2>/dev/null)
-        if [ "$status" != "completed" ]; then
-            count=$((count + 1))
-        fi
-    done
-
-    echo "$count"
-}
+# ============================================================================
+# Step 4: Block once with arming instructions
+# ============================================================================
 
 # Function to list incomplete tasks for a session.
 list_incomplete_tasks() {
@@ -92,88 +105,17 @@ list_incomplete_tasks() {
     echo "$output"
 }
 
+# Fold an incomplete-task reminder into the single arming block, rather
+# than blocking separately for it (repeated task nags are what tripped
+# the consecutive-block cap; /goal handles task gating natively now).
+task_note=""
 if [ -n "$session_id" ]; then
-    incomplete_count=$(count_incomplete_tasks "$session_id")
-
-    if [ "$incomplete_count" -gt 0 ]; then
-        task_list=$(list_incomplete_tasks "$session_id")
-
-        cat <<EOF
-{"decision": "block", "reason": "${incomplete_count} incomplete task(s): ${task_list}Complete ALL tasks before stopping."}
-EOF
-        exit 0
+    task_list=$(list_incomplete_tasks "$session_id")
+    if [ -n "$task_list" ]; then
+        task_note="Note: incomplete task(s) remain: ${task_list}finish or update them first if appropriate. "
     fi
 fi
 
-# ============================================================================
-# Steps 2.5 & 3 removed: automated diff and status messages were noisy and
-# flooded the inbox with near-identical content (see issue #78). Diffs are
-# now sent explicitly via `substrate send-diff` with content-based
-# idempotency, and heartbeats handle liveness for the UI.
-# ============================================================================
+reason="No mail watcher is armed. ${task_note}Arm the watcher now: run \`substrate watch --session-id ${session_id:-\$CLAUDE_SESSION_ID}\` via the Bash tool with run_in_background set to true, then end your turn. The watcher exits when mail arrives, which wakes you automatically with a digest; re-arm it after handling each wake."
 
-# ============================================================================
-# Step 4: Long poll to keep agent alive
-# ============================================================================
-
-# No mail, no tasks - do a longer poll to keep agent alive.
-# --always-block ensures we output block decision even with no messages.
-# This keeps the agent alive indefinitely, continuously checking for work.
-#
-# When the server is unreachable (poll fails immediately), we fall back to
-# a local sleep-based retry loop to avoid churning the hook in a tight loop.
-
-# Debug log for poll.
-debug_log="$HOME/.subtrate/stop_hook_trace.log"
-mkdir -p "$(dirname "$debug_log")"
-echo "=== Stop Hook Step 4: $(date) ===" >> "$debug_log"
-echo "session_args: [$session_args]" >> "$debug_log"
-
-# Record start time so we can fill the poll window on failure.
-# Match the 4-day hook timeout so the poll blocks essentially forever.
-# The server-side long-poll handles wake-on-message internally.
-start_time=$(date +%s)
-max_duration=345000  # ~4 days, just under hook timeout
-
-poll_output=$(substrate poll $session_args --wait=${max_duration}s --format hook --always-block 2>&1)
-poll_exit=$?
-echo "poll_exit: $poll_exit, output: $poll_output" >> "$debug_log"
-
-if [ $poll_exit -eq 0 ]; then
-    # Output poll result directly. The poll command already includes a
-    # suitable reason; no need to inject "Standing by" text.
-    echo "$poll_output"
-else
-    # Poll failed (server likely down). Sleep-retry to fill the remaining
-    # time window instead of returning immediately, which would cause the
-    # hook to churn in a tight loop.
-    elapsed=$(( $(date +%s) - start_time ))
-    remaining=$(( max_duration - elapsed ))
-    echo "Poll failed, entering sleep-retry loop (${remaining}s remaining)" >> "$debug_log"
-
-    retry_interval=30
-    while [ "$remaining" -gt 0 ]; do
-        sleep_time=$retry_interval
-        if [ "$sleep_time" -gt "$remaining" ]; then
-            sleep_time=$remaining
-        fi
-        sleep "$sleep_time"
-        remaining=$(( max_duration - ($(date +%s) - start_time) ))
-
-        # Try polling again in case the server came back up.
-        retry_output=$(substrate poll $session_args --wait=5s --format hook --always-block 2>/dev/null)
-        if [ $? -eq 0 ]; then
-            has_mail=$(echo "$retry_output" | jq -r '.reason // ""' | grep -c "unread")
-            if [ "$has_mail" -gt 0 ]; then
-                echo "Server recovered, mail found" >> "$debug_log"
-                echo "$retry_output"
-                exit 0
-            fi
-        fi
-
-        remaining=$(( max_duration - ($(date +%s) - start_time) ))
-        echo "Retry at $(date), ${remaining}s remaining" >> "$debug_log"
-    done
-
-    echo '{"decision": "block", "reason": "Server unreachable, retrying."}'
-fi
+jq -cn --arg reason "$reason" '{"decision": "block", "reason": $reason}'

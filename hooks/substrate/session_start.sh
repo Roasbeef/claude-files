@@ -36,3 +36,17 @@ fi
 if [ -n "$result" ]; then
     echo "$result"
 fi
+
+# Instruct the agent to arm the mail watcher. Background tasks die with
+# the Claude Code process, so every new session needs a fresh watcher.
+# Skip the instruction if one is somehow already armed for this agent.
+# Array form prevents word-splitting of odd session IDs.
+session_args=()
+if [ -n "$session_id" ]; then
+    session_args=(--session-id "$session_id")
+fi
+
+if ! substrate watch --check "${session_args[@]}" >/dev/null 2>&1; then
+    echo ""
+    echo "[Subtrate Watch] Arm your mail watcher: run \`substrate watch --session-id ${session_id:-\$CLAUDE_SESSION_ID}\` via the Bash tool with run_in_background set to true. It blocks until mail arrives, then exits with a digest, which wakes you automatically. Re-arm it after handling each wake."
+fi

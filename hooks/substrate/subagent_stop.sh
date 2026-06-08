@@ -15,19 +15,22 @@ input=$(cat)
 stop_hook_active=$(echo "$input" | jq -r '.stop_hook_active // false')
 session_id=$(echo "$input" | jq -r '.session_id // empty')
 
-# Build session ID args if available.
-session_args=""
+# Build session ID args if available. Array form prevents
+# word-splitting of odd session IDs.
+session_args=()
 if [ -n "$session_id" ]; then
-    session_args="--session-id $session_id"
+    session_args=(--session-id "$session_id")
 fi
 
 # If we already blocked once and Claude processed messages, allow exit.
-# stop_hook_active=true means Claude is trying to stop after our previous block.
+# stop_hook_active=true means Claude is trying to stop after our previous
+# block. Allow is an empty object — newer Claude Code rejects
+# {"decision": null}.
 if [ "$stop_hook_active" = "true" ]; then
-    echo '{"decision": null}'
+    echo '{}'
     exit 0
 fi
 
 # First stop - quick check for messages (no long-polling).
 # Block only if there are pending messages.
-substrate poll $session_args --format hook 2>/dev/null || echo '{"decision": null}'
+substrate poll "${session_args[@]}" --format hook 2>/dev/null || echo '{}'
