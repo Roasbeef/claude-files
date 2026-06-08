@@ -19,6 +19,24 @@ If unsure, check: `ls .sessions/active/` -- if files exist, run `/session-resume
 - For comments, always use complete sentences ending with a period.
 - If unsure about a Go package/struct API, use `go doc` to look it up.
 
+# Writing Skills
+
+Two orthogonal prose skills live in `~/.claude/skills/` and are available in
+every project:
+
+- **roasbeef-prose** is the *voice* skill: write the way I write (cadence,
+  idioms, "In this commit, we...", my structure). Reach for it on PRs, commit
+  messages, docs, and posts. A future pass will tighten it from a corpus of my
+  own writing.
+- **technical-writing** is the *clarity* skill, distilled from Pinker's *The
+  Sense of Style*: audience-neutral principles for clear prose (the window
+  metaphor, the curse of knowledge, coherence, syntax, usage).
+
+Voice and clarity compose: my voice, made clear. When the two skills conflict
+on a style choice (e.g. em-dashes, which technical-writing welcomes but
+roasbeef-prose bans), **roasbeef-prose wins** because it encodes my actual
+voice; let technical-writing inform structure and clarity underneath.
+
 # Decision Checkpoints
 
 Before making significant decisions during implementation, STOP and use `AskUserQuestion`.
