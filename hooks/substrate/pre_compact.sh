@@ -59,10 +59,21 @@ $summary
 ---
 (Automated status before context compaction)"
 
+    # Build a project/branch context tag for the subject so the user
+    # can tell which worktree is compacting at a glance — agent names
+    # aren't memorable when many agents are running.
+    if [ -n "$project_name" ] && [ -n "$git_branch" ]; then
+        status_ctx="$project_name/$git_branch"
+    elif [ -n "$project_name" ]; then
+        status_ctx="$project_name"
+    else
+        status_ctx="$agent_name"
+    fi
+
     # Send to User agent
     substrate send $session_args \
         --to User \
-        --subject "[Status] $agent_name - Compacting" \
+        --subject "[Status] $status_ctx — Compacting" \
         --body "$status_body" \
         2>/dev/null || true
 } </dev/null >/dev/null 2>&1 &

@@ -30,24 +30,56 @@ if [ -n "$session_id" ]; then
     session_args="--session-id $session_id"
 fi
 
-# Choose subject prefix based on notification type.
+# Resolve project/branch context so the subject line identifies the
+# worktree the notification came from. Without this, subjects like
+# "[Permission] Notification" are ambiguous when many agents are active.
+project_dir="${CLAUDE_PROJECT_DIR:-$cwd}"
+if [ -z "$project_dir" ]; then
+    project_dir="$(pwd)"
+fi
+project_name=$(basename "$project_dir" 2>/dev/null || echo "")
+git_branch=$(git -C "$project_dir" branch --show-current 2>/dev/null || echo "")
+
+# Build a short context tag like "subtrate/main" for the subject line.
+if [ -n "$project_name" ] && [ -n "$git_branch" ]; then
+    ctx_tag="$project_name/$git_branch"
+elif [ -n "$project_name" ]; then
+    ctx_tag="$project_name"
+elif [ -n "$git_branch" ]; then
+    ctx_tag="$git_branch"
+else
+    ctx_tag=""
+fi
+
+# Choose subject prefix based on notification type, then append the
+# context tag so the inbox row is immediately actionable.
 case "$notif_type" in
     permission_prompt)
-        subject="[Permission] $title"
+        prefix="[Permission]"
         ;;
     idle_prompt)
-        subject="[Idle] $title"
+        prefix="[Idle]"
         ;;
     *)
-        subject="[Notification] $title"
+        prefix="[Notification]"
         ;;
 esac
 
+if [ -n "$ctx_tag" ]; then
+    subject="$prefix $ctx_tag — $title"
+else
+    subject="$prefix $title"
+fi
+
 # Build body with context.
 body="$message"
-if [ -n "$cwd" ]; then
+if [ -n "$ctx_tag" ]; then
     body="$body
 
+Project: $ctx_tag"
+fi
+if [ -n "$cwd" ]; then
+    body="$body
 Working directory: $cwd"
 fi
 body="$body
