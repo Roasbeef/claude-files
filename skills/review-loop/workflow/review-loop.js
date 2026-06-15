@@ -184,6 +184,11 @@ const APPLY_SCHEMA = {
           ids: { type: 'array', items: { type: 'string' } },
           commit: { type: 'string' },
           status: { type: 'string', enum: ['applied', 'failed', 'skipped'] },
+          files: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'files actually changed by this fix',
+          },
           note: { type: 'string' },
         },
       },
@@ -217,7 +222,9 @@ const VERIFY_PLAN_SCHEMA = {
           paths: {
             type: 'array',
             items: { type: 'string' },
-            description: 'file/dir paths owned by this slice',
+            description:
+              'plain file or directory path prefixes owned by this slice ' +
+              '(NO globs/wildcards — e.g. "db/" or "oor/registry.go")',
           },
           approxLines: { type: 'number' },
         },
@@ -412,7 +419,8 @@ For each fix:
    If fixupTarget is empty, make a normal \`review:\` commit. Use \`hunk stage\`
    when a file mixes this fix with unrelated changes.
 
-Return one applied entry per fix with its commit sha and status.`,
+Return one applied entry per fix with its commit sha, status, and the list of
+files you actually changed (used to decide which verify slices to re-check).`,
     {
       label: `apply:r${round}`,
       phase: 'Apply',
@@ -432,7 +440,11 @@ yet. In bounded steps:
 3. Group the changed files into 3-6 review slices by package/area, each bounded
    to roughly <=2000 changed lines so no single reviewer faces the whole diff.
    Keep related files together (a package and its tests in one slice).
-Return the slices (area name, the paths it owns, approx changed lines).`,
+For each slice, the "paths" it owns MUST be plain file or directory path
+prefixes exactly as they appear in the diff (e.g. "db/" or "oor/registry.go").
+Do NOT use globs or wildcards — downstream code matches these by literal prefix,
+and every changed file must fall under exactly one slice's paths.
+Return the slices (area name, the plain path prefixes it owns, approx lines).`,
     {
       label: 'verify:plan',
       phase: 'Verify',
@@ -541,6 +553,27 @@ function atOrAboveCutoff(fixNow) {
 // filesOf flattens the file lists of a set of fix-now items.
 function filesOf(fixNow) {
   return (fixNow || []).flatMap((f) => f.files || [])
+}
+
+// normPath strips glob/dir suffixes so slice paths and file paths compare as
+// plain prefixes.
+function normPath(p) {
+  return (p || '')
+    .replace(/\/?\*+$/, '')
+    .replace(/\/\.\.\.$/, '')
+    .replace(/\/+$/, '')
+}
+
+// sliceTouchedBy reports whether any of `files` falls inside this slice, by
+// prefix match in either direction (a slice path can be a dir prefix of a file,
+// or a file path the slice owns directly).
+function sliceTouchedBy(slice, files) {
+  const ps = (slice.paths || []).map(normPath).filter(Boolean)
+  return (files || []).some((f) =>
+    ps.some(
+      (p) => f === p || f.startsWith(p + '/') || p.startsWith(f + '/')
+    )
+  )
 }
 
 // ---- main loop ------------------------------------------------------------
@@ -698,10 +731,15 @@ if (canRepair()) {
   allFollowUp.push(...(verdict.followUp || []))
   allRejected.push(...(verdict.rejected || []))
 
+  let repairedFiles = []
   if (fixNow.length > 0) {
     phase('Apply')
     const applied = await applyFixes(fixNow, round)
     allApplied.push(...(applied?.applied || []))
+    // Prefer the files the apply agent reports it actually changed; fall back
+    // to triage's predicted files if it reported none.
+    repairedFiles = (applied?.applied || []).flatMap((a) => a.files || [])
+    if (repairedFiles.length === 0) repairedFiles = filesOf(fixNow)
   }
   rounds.push({
     round,
@@ -710,15 +748,25 @@ if (canRepair()) {
     source: 'verifier',
   })
 
-  // Incremental re-verify: the tree changed, so re-materialize the diff, then
-  // re-verify only the slices that had reopened (the previously-approved slices
-  // are trusted; the repair targeted the reopened areas).
+  // Incremental re-verify with a spillover guard: re-verify the slices that
+  // reopened PLUS any previously-approved slice the repair actually edited into
+  // (a fix in a reopened area can bleed into an approved one). When the repair
+  // stays within the reopened areas — the common case — this is exactly the
+  // reopened set, so the optimization still holds; the guard only widens on
+  // genuine spillover.
   phase('Verify')
   await rematerialize()
-  const reopenedSlices = allSlices.filter((s) => reopenedAreas.has(s.area))
-  const target = reopenedSlices.length > 0 ? reopenedSlices : allSlices
-  log(`Incremental re-verify: ${target.length} of ${allSlices.length} slices`)
-  verifier = await safeVerify(target)
+  const target = allSlices.filter(
+    (s) => reopenedAreas.has(s.area) || sliceTouchedBy(s, repairedFiles)
+  )
+  const effectiveTarget = target.length > 0 ? target : allSlices
+  const spill = effectiveTarget.length - reopenedAreas.size
+  log(
+    `Incremental re-verify: ${effectiveTarget.length} of ${allSlices.length} ` +
+    `slices (${reopenedAreas.size} reopened` +
+    `${spill > 0 ? `, +${spill} touched by repair` : ''})`
+  )
+  verifier = await safeVerify(effectiveTarget)
 }
 
 return {
