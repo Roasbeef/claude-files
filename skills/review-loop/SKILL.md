@@ -1,7 +1,7 @@
 ---
 name: review-loop
 description: "Adversarial review→triage→fix loop until a cold verifier signs off. Fans out lens-specific reviewer subagents, verifies every finding against the code (killing false positives), auto-applies confirmed fixes as fixup commits, and repeats until a fresh verifier approves. Prefers a deterministic dynamic workflow when available; falls back to in-instance Task dispatch. Use when the user types /review-loop or asks to adversarially review-and-fix a change set, branch, or commit range until clean."
-argument-hint: "[<commit-range> | <branch> | (default: branch vs base / uncommitted)] [--base=<branch>] [--max-iters=<N>] [--cutoff=high|medium|low] [--workflow|--inline]"
+argument-hint: "[<commit-range> | <branch> | (default: branch vs base / uncommitted)] [--base=<branch>] [--max-iters=<N>] [--cutoff=high|medium|low] [--profile=lite|standard|thorough] [--workflow|--inline]"
 disable-model-invocation: true
 allowed-tools:
   - Task
@@ -120,10 +120,28 @@ Workflow({
     briefPath: ".review-loop/brief.md",
     lenses:    [ /* the selected lens descriptors */ ],
     cutoff:    "medium",
-    maxIters:  5,
+    profile:   "standard",   // lite | standard | thorough
+    maxIters:  5,            // optional; overrides the profile's round cap
   },
 })
 ```
+
+**Profiles** are the speed-vs-rigor dial (`--profile`, default `standard`):
+
+- **lite** — one combined finder (all lenses in a single pass), one round,
+  chunked verify still on. For a quick pass on a small diff.
+- **standard** — the full always-on lens panel, up to 5 rounds.
+- **thorough** — the full panel plus a completeness-critic pass (a strong
+  reviewer that hunts for what the lens-scoped finders structurally couldn't
+  see), up to 8 rounds.
+
+**Model tiering.** The two bounded/mechanical phases run on a cheaper tier:
+slice planning (`planVerify`) and triage both run on **Sonnet** — that is the
+floor, the template never drops below it. The three quality-critical phases —
+the adversarial finders, apply, and the cold slice-verifiers — inherit the
+strong main-loop model. Triage is told to **keep-when-uncertain** so the
+cheaper judge never silently drops a real bug; a false positive it lets through
+is caught by apply's tests, but a real bug it rejected would be lost.
 
 The workflow runs find→triage→apply→loop→verify and returns a structured
 summary (`rounds`, confirmed vs rejected per round, applied fixups, deferred
@@ -152,6 +170,18 @@ Four behaviors of the current template worth knowing when you read its result:
 - **Budget-aware.** If the turn has a token target, the loop refuses to start a
   round it can't pay for while reserving a slice for verify (`stopReason:
   "budget"`), so it always reaches a verdict instead of dying mid-round.
+- **Rejections carry forward.** Each round's triaged-out findings are fed to the
+  next round's finders ("do not re-raise these") so the loop stops
+  re-discovering the same non-bugs — the main driver of rounds that never
+  converge.
+- **Incremental re-verify (with a spillover guard).** After a verifier reopen +
+  repair pass, the tree's diff is re-materialized and the re-verify set is the
+  slices that reopened PLUS any previously-approved slice the repair actually
+  edited into (the apply agent reports its changed files; they're matched back
+  to slices by path prefix). When the repair stays within the reopened areas —
+  the common case — that set is exactly the reopened slices, so the optimization
+  holds; the guard only widens on genuine spillover, never silently trusting a
+  slice a fix bled into.
 
 Report `stopReason` and `verdict` prominently. If the workflow hits `maxIters`
 without converging, or returns `unverified`, surface that and ask how to
