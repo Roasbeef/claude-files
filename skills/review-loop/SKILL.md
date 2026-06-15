@@ -72,7 +72,10 @@ Do this in the first turn, before any dispatch, regardless of execution path.
    triage accurate. Include: what the change does and **why** (approved intent);
    hard constraints and environment/protocol semantics reviewers can't infer
    from the diff; accepted tradeoffs and out-of-scope items; the pre-flight
-   baseline.
+   baseline. Front-load every scope cut you know about, but note the brief is
+   no longer frozen at launch: triage, the finders, and the cold verifiers all
+   re-Read `.review-loop/brief.md` from disk, so a mid-run edit to it is honored
+   on the next phase (the workflow passes `briefPath` for exactly this).
 
 4. **Pick lenses from the changed files** and record them in
    `.review-loop/lenses.md`. Always run the baseline adversarial panel; add
@@ -114,6 +117,7 @@ Workflow({
     diffCmd:   "<exact diff command>",
     base:      "<base branch>",
     brief:     "<contents of .review-loop/brief.md>",
+    briefPath: ".review-loop/brief.md",
     lenses:    [ /* the selected lens descriptors */ ],
     cutoff:    "medium",
     maxIters:  5,
@@ -122,13 +126,36 @@ Workflow({
 ```
 
 The workflow runs find→triage→apply→loop→verify and returns a structured
-summary (rounds, confirmed vs rejected per round, applied fixups, deferred
-follow-ups, verifier verdict). When it returns, the main loop does Phase 6
-(finalize) below — autosquash offer and final green build — because those steps
-are interactive and side-effectful.
+summary (`rounds`, confirmed vs rejected per round, applied fixups, deferred
+`followUp`, `verdict`, `stopReason`, `tokensSpent`). When it returns, the main
+loop does Phase 6 (finalize) below — autosquash offer and final green build —
+because those steps are interactive and side-effectful.
 
-If the workflow hits `maxIters` without converging, it returns what remains
-rather than looping forever; surface that and ask how to proceed.
+Four behaviors of the current template worth knowing when you read its result:
+
+- **Chunked cold verify.** A single whole-diff verifier reliably stalls the
+  no-progress watchdog on large change sets (and, because retries share one
+  cache key, all retries hit the same wall and the run throws away its whole
+  summary). The template instead pre-materializes the diff to
+  `.review-loop/final.diff`, partitions it into bounded per-area slices, and
+  fans out one cold `code-reviewer` per slice; it approves only if every slice
+  approves. This chunked verify is what catches cross-area bugs the lens-scoped
+  finders miss, so it earns its keep — it just has to be bounded to run at all.
+- **Verify is non-fatal.** If the verify phase still throws, the workflow
+  returns the accumulated find/triage/apply summary with `verdict: "unverified"`
+  rather than discarding it. The fixes are already durable in git; surface the
+  unverified verdict and offer to re-run verify (or run it manually, chunked).
+- **Diminishing-returns stop.** Besides a clean round, the loop also stops when
+  two consecutive rounds touch no new file (`stopReason: "diminishing-returns"`)
+  — churning the same surface is a signal to hand off to the verifier, not to
+  burn the full `maxIters`.
+- **Budget-aware.** If the turn has a token target, the loop refuses to start a
+  round it can't pay for while reserving a slice for verify (`stopReason:
+  "budget"`), so it always reaches a verdict instead of dying mid-round.
+
+Report `stopReason` and `verdict` prominently. If the workflow hits `maxIters`
+without converging, or returns `unverified`, surface that and ask how to
+proceed rather than treating it as a pass.
 
 ## Fallback path: in-instance Task dispatch (`--inline` or no Workflow tool)
 
@@ -174,13 +201,21 @@ Use `hunk stage` for files mixing fix-now and deferred changes. Log to
 ### Phase 4 — loop
 Increment the round, re-run Phase 1 finders on the **new** diff. New
 triage-confirmed fix-now findings → back to Phase 2/3. A clean round (zero new
-fix-now) → Phase 5. Stop at `--max-iters` and report what remains.
+fix-now) → Phase 5. Also stop early when two rounds in a row touch no new file
+(diminishing returns) — that surface is reviewed; hand off to the verifier.
+Stop at `--max-iters` and report what remains.
 
-### Phase 5 — cold acceptance verifier
-Spawn ONE fresh `code-reviewer` that saw no prior round. Give it only the brief
-and the full final diff (`<base>..HEAD`) and ask: APPROVE, or RE-OPEN with
-concrete findings. APPROVE → Phase 6. RE-OPEN → feed findings into Phase 2
-(subject to the same triage discipline).
+### Phase 5 — chunked cold acceptance verifier
+Do NOT hand one fresh reviewer the entire diff — on a large change set it goes
+silent composing the verdict and trips the no-progress watchdog. Instead:
+pre-materialize the diff (`git diff <base>..HEAD > .review-loop/final.diff`),
+partition the changed files into 3-6 bounded per-area slices, and spawn one
+fresh `code-reviewer` per slice (none having seen a prior round), each reading
+only its slice and told to work in bounded steps without long silent builds.
+APPROVE only if every slice approves. Any slice that RE-OPENs → feed its
+findings into Phase 2 (subject to the same triage discipline), then re-verify.
+If a verifier still stalls, treat the result as `unverified` and keep the
+applied fixes — do not discard the run.
 
 ## Phase 6: Finalize (always done by the main loop)
 
@@ -207,3 +242,9 @@ concrete findings. APPROVE → Phase 6. RE-OPEN → feed findings into Phase 2
   findings; verify-and-reject is what makes auto-apply safe.
 - **Cutoff discipline.** Fix C/H/M in-loop; defer L/I to keep the loop
   converging and the diff focused. Surface deferred items, don't drop them.
+- **Verify is the high-value step, not a rubber stamp.** In practice the cold
+  cross-area verifier catches data-loss/interaction bugs the lens-scoped
+  iterative finders miss. It is also the step most prone to stalling, which is
+  why the template chunks it. Never silently skip verify; an `unverified`
+  result still needs a human or a manual chunked re-run before you call it
+  clean.
