@@ -99,6 +99,12 @@ loop as a deterministic harness. The bundled script
 `workflow/review-loop.js` is a **template** — adapt it to the run (the chosen
 lens set, cutoff, and max-iters), do not assume it must run verbatim.
 
+> **Template pitfall (read before editing the script):** `meta` must be a
+> **pure literal**. No string concatenation, no template interpolation, no
+> variables in any field. The Workflow tool rejects anything else with
+> `meta must be a pure literal`, which breaks every run. If you adapt the
+> template, keep `description`/`whenToUse` single string literals.
+
 Invoke it via the `Workflow` tool, passing the Phase 0 artifacts as `args`:
 
 ```

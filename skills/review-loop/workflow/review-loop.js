@@ -1,12 +1,13 @@
+// NOTE: `meta` must be a PURE LITERAL — no string concatenation, no template
+// interpolation, no variables. The Workflow tool rejects anything else with
+// "meta must be a pure literal", which silently breaks every run. Keep every
+// field below a single literal.
 export const meta = {
   name: 'review-loop',
   description:
     'Adversarial review→triage→fix loop until a cold verifier signs off',
   whenToUse:
-    'Invoked by the /review-loop skill after it resolves scope and writes a ' +
-    'design brief. Fans out lens-specific adversarial reviewers, triages ' +
-    'findings against the code, applies confirmed fixes as fixup commits, ' +
-    'loops on the new surface, and ends only when a cold verifier approves.',
+    'Invoked by the /review-loop skill after it resolves scope and writes a design brief. Fans out lens-specific adversarial reviewers, triages findings against the code, applies confirmed fixes as fixup commits, loops on the new surface, and ends only when a chunked cold verifier approves.',
   phases: [
     { title: 'Find', detail: 'one adversarial reviewer per lens' },
     { title: 'Triage', detail: 'verify, dedup, kill false positives' },
