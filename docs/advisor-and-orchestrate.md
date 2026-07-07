@@ -45,7 +45,7 @@ Do **not** consult for things you can verify by reading the code, routine edits,
 ### Two invariants
 
 1. **Cheap main loop** (above).
-2. **Small packet.** A sub-agent starts fresh and cannot share the main loop's prompt cache — caches are model-scoped, so every byte you send the advisor is cold, expensive context. Dumping the transcript into a Fable advisor spends Fable rates on 100k tokens and destroys the arbitrage. Send ~a page (situation, one precise question, the 2–3 snippets that bear on it), get back a paragraph (a plan, a decision, or what you're missing) — never code. The executor writes the code.
+2. **Relevant packet, not raw.** A sub-agent starts fresh and cannot share the main loop's prompt cache — caches are model-scoped, so every byte you send is cold, expensive context. That argues against pasting the *whole transcript* or unrelated files, not against detail: a thin packet earns thin, generic advice. Send everything that bears on the question — the full situation, what you tried and how it failed, the relevant code with real context — and cut only what doesn't. You get back a plan, a decision, or what you're missing — never code; the executor writes the code. For a task with several checkpoints, keep one advisor alive and `SendMessage` it the delta rather than re-spawning cold each time.
 
 ### Usage
 
@@ -93,7 +93,7 @@ They compose: an `/orchestrate` planner can itself lean on `/advisor` judgment, 
 ## Gotchas, collected
 
 - **`/advisor` on an Opus/Fable session is a no-op economically.** Move the main loop to Sonnet first.
-- **Model-scoped caches** mean every sub-agent consult pays cold context. Keep packets small; consult rarely.
+- **Model-scoped caches** mean each one-shot consult pays cold context. Keep packets relevant and consult rarely; for a task with several checkpoints, keep one advisor alive and `SendMessage` the delta instead of re-spawning.
 - **Subscription vs API.** On a Max plan the "executor rate" isn't literal dollars, but the same logic governs your rate-limit and context budget. On API it's real money.
 - **Workflows are opt-in scale.** `/orchestrate` can spawn many agents. Use it when the task genuinely decomposes; for a single-thread task the fan-out is pure overhead.
 - **`second-opinion` / codex MCP** is a real external advisor, but a different provider — a fit for "sanity-check with an outside model," not for same-family cost arbitrage.
