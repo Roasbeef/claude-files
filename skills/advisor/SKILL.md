@@ -56,15 +56,19 @@ Read the relevant files yourself first so you can hand over real excerpts rather
 
 ### 3. Spawn the advisor sub-agent
 
-Use the `Task` tool with `model` set to the chosen tier (`model: "opus"` or `model: "fable"`) and `subagent_type: "Plan"` (read-only planner) for plan/decision questions, or `general-purpose` if it needs to read more code. One call — this is a consult, not a fan-out. Prompt it as an advisor:
+Use the `Task` tool with `model` set to the chosen tier (`model: "opus"` or `model: "fable"`). Default to `subagent_type: "general-purpose"` spawned with `run_in_background: true` — this is the combination confirmed to return an addressable `agentId`, which you need if there's any chance of a follow-up. Reserve `subagent_type: "Plan"` (read-only planner) or a plain foreground spawn for a consult you're sure will be one-shot; a foreground `Plan` spawn returned no `agentId` in testing, and `SendMessage` to its description string failed outright with "not reachable." One call — this is a consult, not a fan-out. Prompt it as an advisor:
 
 > You are a senior advisor consulted by a cheaper executor model that is doing the actual work. Below is a consultation packet. Return terse, high-leverage guidance — a plan, a decision with a one-line rationale, or the specific thing the executor is missing. **Do not write the implementation**; the executor will. Be direct, rank your points, and if the executor's framing is wrong, say so first.
 >
 > [packet]
 
-**Follow-up consults on the same task.** Default to one-shot — most tasks consult once. But when a single task hits several checkpoints (plan review, then a failed attempt, then a risky change), keep the advisor alive: spawn once, then `SendMessage` its agent ID with only the *delta* on each follow-up. It retains what it already told you and the constraints, so you send less, and its stable context can hit the provider-side cache — recovering part of the cold-context cost a fresh spawn pays every time. Keep it honest: the retained history is re-billed at advisor rates each turn, so let it stay lean, and abandon it at the task boundary — never carry an advisor across tasks. If `SendMessage` finds it gone, spawn a fresh one with a one-paragraph re-summary.
+**Follow-up consults on the same task.** Default to one-shot — most tasks consult once. For a task with several checkpoints (plan review, then a failed attempt, then a risky change), keep one advisor alive: send only the *delta* on each follow-up via `SendMessage` to its `agentId`.
 
-**To make it resumable, spawn it with `run_in_background: true`.** A foreground spawn doesn't reliably surface an `agentId` you can address later — confirmed by testing: `subagent_type: "Plan"` foreground returned no ID, and `SendMessage` to its description string failed with "not reachable." `subagent_type: "general-purpose"` spawned with `run_in_background: true` did return a real `agentId`, and `SendMessage` to that ID correctly resumed it with full context. If you only need one shot, foreground is fine and simpler; if you plan on a follow-up, spawn in the background from the start.
+**Completion doesn't end it, within this session.** A finished advisor is idle, not gone — `SendMessage` to its `agentId` resumes it from its transcript with everything it already knows, and you can go back and forth as many times as the task needs. That persistence doesn't survive a full session restart, though — a new session can't reach an old `agentId`, so respawn cold with a one-paragraph re-summary if you're picking the task back up later. Keep it honest anyway: the retained history is re-billed at advisor rates every turn, so let it stay lean and don't carry one across unrelated tasks.
+
+A message to a still-working advisor lands on its next tool round rather than instantly; if it finishes first, the delta triggers an automatic resume, and the advisor may `SendMessage(to: "main")` back on its own once it's processed it — no polling required. See `docs/advisor-and-orchestrate.md` for the full mechanics.
+
+When you're done, just stop messaging it — there's no explicit teardown for an idle advisor. (`TaskStop` on its `agentId` only finds it while a task is actively in flight; once idle it reports "no task found.") An abandoned advisor simply sits dormant, costing nothing further, until the session ends. If `SendMessage` ever finds it truly gone, spawn a fresh one with a one-paragraph re-summary.
 
 ### 4. Relay, don't dump
 

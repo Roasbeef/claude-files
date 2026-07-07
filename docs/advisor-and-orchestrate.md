@@ -45,7 +45,17 @@ Do **not** consult for things you can verify by reading the code, routine edits,
 ### Two invariants
 
 1. **Cheap main loop** (above).
-2. **Relevant packet, not raw.** A sub-agent starts fresh and cannot share the main loop's prompt cache — caches are model-scoped, so every byte you send is cold, expensive context. That argues against pasting the *whole transcript* or unrelated files, not against detail: a thin packet earns thin, generic advice. Send everything that bears on the question — the full situation, what you tried and how it failed, the relevant code with real context — and cut only what doesn't. You get back a plan, a decision, or what you're missing — never code; the executor writes the code. For a task with several checkpoints, keep one advisor alive and `SendMessage` it the delta rather than re-spawning cold each time.
+2. **Relevant packet, not raw.** A sub-agent starts fresh and cannot share the main loop's prompt cache — caches are model-scoped, so every byte you send is cold, expensive context. That argues against pasting the *whole transcript* or unrelated files, not against detail: a thin packet earns thin, generic advice. Send everything that bears on the question — the full situation, what you tried and how it failed, the relevant code with real context — and cut only what doesn't. You get back a plan, a decision, or what you're missing — never code; the executor writes the code.
+
+### Lifecycle: how long an advisor stays alive, and how to keep one around
+
+Spawn with `subagent_type: "general-purpose"` and `run_in_background: true` — this is the specific combination confirmed to return an addressable `agentId`, which you need for any follow-up. (A foreground `Plan`-type spawn returned no `agentId` and `SendMessage` to it failed with "not reachable" — but that test changed both `subagent_type` and background-vs-foreground at once, so treat it as "this combination is verified to work," not as a settled claim about which single factor matters.)
+
+**Completion is not termination, within the current session.** An advisor that has answered and gone quiet is idle, not gone — `SendMessage` to its `agentId` resumes it from its transcript, retaining everything it already knows, for as many round trips as the task needs (verified across several consecutive resumes in practice). That persistence doesn't cross a full session restart — a new session has no way to reach an old `agentId`, so treat a genuinely paused-and-resumed-later task as a cold respawn with a re-summary, not a live resume. The retained history is still billed at advisor rates each turn, so keep follow-ups lean and don't drag one advisor into a second, unrelated task.
+
+**Delivery has a timing wrinkle.** A message sent while the advisor is still actively working is queued for its *next tool round*, not injected instantly. If the advisor finishes before taking another tool round, the queued delta won't appear in that immediate answer — but it isn't dropped: it triggers an automatic resume afterward, and the advisor may proactively call `SendMessage(to: "main")` once it has processed the delta, without you needing to poll.
+
+**There's no explicit kill for an idle advisor.** `TaskStop` on its `agentId` only finds it while it has an active, in-flight task — once idle, `TaskStop` reports "no task found." So "abandoning" an advisor at the end of a task just means you stop sending it messages; it sits as a dormant, resumable transcript costing nothing further (until the session itself ends), not something you tear down. Use `TaskStop` only if you need to hard-interrupt one that's still actively running.
 
 ### Usage
 
@@ -93,7 +103,7 @@ They compose: an `/orchestrate` planner can itself lean on `/advisor` judgment, 
 ## Gotchas, collected
 
 - **`/advisor` on an Opus/Fable session is a no-op economically.** Move the main loop to Sonnet first.
-- **Model-scoped caches** mean each one-shot consult pays cold context. Keep packets relevant and consult rarely; for a task with several checkpoints, keep one advisor alive and `SendMessage` the delta instead of re-spawning.
+- **Model-scoped caches** mean each cold consult pays full context. Keep packets relevant and consult rarely — see Lifecycle above for reusing one advisor across a task's checkpoints instead of re-spawning cold each time.
 - **Subscription vs API.** On a Max plan the "executor rate" isn't literal dollars, but the same logic governs your rate-limit and context budget. On API it's real money.
 - **Workflows are opt-in scale.** `/orchestrate` can spawn many agents. Use it when the task genuinely decomposes; for a single-thread task the fan-out is pure overhead.
 - **`second-opinion` / codex MCP** is a real external advisor, but a different provider — a fit for "sanity-check with an outside model," not for same-family cost arbitrage.
