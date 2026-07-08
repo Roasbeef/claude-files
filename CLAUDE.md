@@ -15,6 +15,73 @@ Signs compaction just occurred:
 
 If unsure, check: `ls .sessions/active/` -- if files exist, run `/session-resume`.
 
+# Decision Checkpoints
+
+At a significant decision point, first decide **who** to ask.
+
+- **Judgment call** ("is this approach sound," "what am I missing," "which of
+  two designs is better") -> consult `/advisor`, but only when this session's
+  main loop is running on the cheap tier (Sonnet). If the session is already on
+  Opus/Fable, you *are* the advisor, so just reason it through yourself. Aim
+  for roughly once per non-trivial task; over-consulting turns the cheap
+  session expensive one call at a time.
+- **Preference or scope call** that only the user can settle -> STOP and use
+  `AskUserQuestion`. This covers:
+  - **Removing/skipping tests** - Never remove, skip, or disable tests without asking
+  - **Deleting code/files** - Ask before removing functionality (dead imports are fine)
+  - **Architectural changes** - New patterns, dependencies, or structural changes not in original plan
+  - **Workarounds** - When the intended approach fails, ask before implementing alternatives
+  - **Scope changes** - Adding features not requested, or omitting requested features
+  - **API/interface changes** - Modifying public interfaces or contracts
+
+**Example - instead of deciding autonomously:**
+> "I'll remove these tests since they're incompatible with the new approach"
+
+**Ask with options:**
+> "The mutex approach breaks 3 channel-based tests. Options:
+> 1. Rewrite tests for mutex pattern
+> 2. Remove tests (reduces coverage)
+> 3. Keep both patterns (more complexity)
+> Which do you prefer?"
+
+# Parallel Work: /orchestrate
+
+When a task decomposes into independent, parallel work items (a multi-file
+refactor, N similar edits across a codebase, a broad research or audit sweep),
+reach for `/orchestrate`: an expensive planner (Opus/Fable) splits the work,
+cheap Sonnet/Haiku workers run it in parallel, and the planner synthesizes the
+results. It has `disable-model-invocation: true`, so it never fires on its
+own, you have to invoke it by name. Don't reach for it on inherently
+sequential work or a single-file change; that's just doing the work, or
+`/advisor` if you need a course-correction along the way.
+
+# Who to Talk To
+
+Three channels, three purposes: `AskUserQuestion` for a blocking
+preference/scope decision only the user can make; Subtrate mail for async
+status updates and reaching the user outside a blocking prompt; `/advisor` for
+consulting a stronger model on a judgment call. Don't conflate them.
+
+# Task Completion Integrity (CRITICAL)
+
+**NEVER mark a task as complete prematurely.** A task is only complete when ALL acceptance criteria are met and the work is fully verified.
+
+**Before marking any task complete:**
+1. Verify ALL acceptance criteria are satisfied
+2. Ensure tests pass (if applicable)
+3. Confirm the feature/fix works end-to-end
+4. Do NOT mark complete just to bypass stop hooks or other blockers
+
+**If a stop hook or blocker prevents you from stopping:**
+- This is by design - complete the remaining work
+- Ask the user if you're unsure what remains
+- NEVER mark tasks complete just to satisfy hook requirements
+
+**If you cannot complete a task:**
+- Leave it as `in_progress` or `pending`
+- Log what remains with `/session-log --progress "Partial: ..."`
+- Ask the user for guidance
+
 # Coding Style
 - For comments, always use complete sentences ending with a period.
 - If unsure about a Go package/struct API, use `go doc` to look it up.
@@ -37,31 +104,12 @@ on a style choice (e.g. em-dashes, which technical-writing welcomes but
 roasbeef-prose bans), **roasbeef-prose wins** because it encodes my actual
 voice; let technical-writing inform structure and clarity underneath.
 
-# Decision Checkpoints
-
-Before making significant decisions during implementation, STOP and use `AskUserQuestion`.
-Do not make autonomous choices for non-trivial cases in these categories:
-
-- **Removing/skipping tests** - Never remove, skip, or disable tests without asking
-- **Deleting code/files** - Ask before removing functionality (dead imports are fine)
-- **Architectural changes** - New patterns, dependencies, or structural changes not in original plan
-- **Workarounds** - When the intended approach fails, ask before implementing alternatives
-- **Scope changes** - Adding features not requested, or omitting requested features
-- **API/interface changes** - Modifying public interfaces or contracts
-
-**Example - instead of deciding autonomously:**
-> "I'll remove these tests since they're incompatible with the new approach"
-
-**Ask with options:**
-> "The mutex approach breaks 3 channel-based tests. Options:
-> 1. Rewrite tests for mutex pattern
-> 2. Remove tests (reduces coverage)
-> 3. Keep both patterns (more complexity)
-> Which do you prefer?"
-
 # Git & PRs
 - Don't include "Generated with Claude Code" or "Co-Authored-By: Claude" in commit messages or PR bodies.
 - Don't add any AI attribution footers to commits or PRs.
+- When creating a new branch or worktree, never include "claude" in the name.
+
+---
 
 # Sandbox TLS Fix
 
@@ -69,248 +117,6 @@ When `gh`, `git`, `go`, or other CLI commands fail with TLS/x509/certificate err
 (including `OSStatus -26276` or `certificate is not trusted`), immediately retry the
 command with `dangerouslyDisableSandbox: true`. The macOS sandbox blocks access to
 the Security framework's certificate chain verification via Mach IPC.
-
-# Code Review Workflow
-
-After completing a task or feature, request a code review via Subtrate's native
-review system before creating a PR. This spawns Claude reviewer agents that
-analyze diffs and return structured feedback with issues.
-
-## Post-Commit Review
-```bash
-# Review current branch against main (auto-detects branch/commit/remote)
-substrate review request --session-id "$CLAUDE_SESSION_ID"
-
-# Review a specific branch against a base
-substrate review request --session-id "$CLAUDE_SESSION_ID" --branch feature-x --base main
-
-# Review a specific commit
-substrate review request --session-id "$CLAUDE_SESSION_ID" --commit abc123
-
-# Review a specific PR
-substrate review request --session-id "$CLAUDE_SESSION_ID" --pr 42
-
-# Security-focused review
-substrate review request --session-id "$CLAUDE_SESSION_ID" --type security
-
-# Performance review
-substrate review request --session-id "$CLAUDE_SESSION_ID" --type performance
-
-# Architecture review
-substrate review request --session-id "$CLAUDE_SESSION_ID" --type architecture
-```
-
-## Review Back-and-Forth
-1. Commit changes on feature branch
-2. Run `substrate review request --session-id "$CLAUDE_SESSION_ID"`
-3. Check status: `substrate review status <id> --session-id "$CLAUDE_SESSION_ID"`
-4. View issues: `substrate review issues <id> --session-id "$CLAUDE_SESSION_ID"`
-5. Address issues, commit fixes
-6. Run `substrate review resubmit <id> --session-id "$CLAUDE_SESSION_ID"` to trigger re-review
-   - If the original reviewer is still alive (stop hook polling), feedback is delivered as mail
-   - If the reviewer has exited, a fresh reviewer is spawned automatically
-7. Review system tracks iterations automatically
-
-## Review Types
-- **full** (default) — General review (bugs, logic, security, CLAUDE.md compliance)
-- **security** — Injection, auth bypass, data exposure, crypto
-- **performance** — N+1 queries, memory leaks, allocations
-- **architecture** — Separation of concerns, interface design, testability
-
-## When to Request Reviews
-- After completing a task or feature (before opening a PR)
-- After significant refactoring
-- When touching security-sensitive code (`--type security`)
-- When adding new public interfaces (`--type architecture`)
-
-# Hunk for Precision Staging
-
-Hunk enables line-level git staging, designed for AI agents who know exactly which lines they changed.
-
-**When to use hunk instead of regular git:**
-- You modified multiple areas of a file but only want to commit some changes
-- You want to make atomic, focused commits from a larger set of changes
-- You need to stage specific line ranges without interactive prompts
-
-**Core workflow:**
-```bash
-hunk diff --json                # See changes with line numbers (machine-readable)
-hunk diff                       # Human-readable diff with line numbers
-hunk stage main.go:42-45        # Stage specific lines
-hunk stage main.go:10-20,30-40  # Stage multiple ranges
-hunk preview                    # See what will be committed
-hunk commit -m "message"        # Commit staged changes
-hunk reset                      # Unstage if needed
-```
-
-**FILE:LINES syntax:**
-- `file.go:10` - Single line
-- `file.go:10-20` - Range (inclusive)
-- `file.go:10-20,30-40` - Multiple ranges in one file
-- `file.go:10 other.go:5-8` - Multiple files (space-separated)
-
-Line numbers refer to **new file** lines (what editors display), not old file lines.
-
-**Atomic change groups:**
-When a replacement (deletions + additions with no context between them) is
-partially selected, hunk automatically includes the entire group. You cannot
-stage half a replacement — the deletions and additions are atomic. Pure-addition
-and pure-deletion groups can still be individually line-selected.
-
-**Fallback when staging fails:**
-If `hunk stage` fails with "patch does not apply", fall back to:
-- `git add <file>` for whole-file staging
-- Broader line ranges that cover entire change groups
-- Stage file-by-file instead of cherry-picking lines across many hunks
-
-**Best practices:**
-- Run `hunk diff --json` to get exact line numbers before staging.
-- Use `hunk preview` to verify the patch looks correct before committing.
-- For focused commits, stage only related changes together.
-
-# Hunk for Programmatic Rebase
-
-Hunk provides non-interactive rebase commands for AI agents who need to manipulate git history without prompts.
-
-**When to use hunk rebase:**
-- Squashing fixup commits into their parent
-- Dropping debug/temporary commits before PR
-- Reordering commits for logical grouping
-- Running commands (tests) between commits during rebase
-
-**Core workflow:**
-```bash
-hunk rebase list --onto main           # See commits to rebase
-hunk rebase run --onto main <actions>  # Execute rebase
-hunk rebase status                     # Check if rebase in progress
-hunk rebase continue                   # Continue after resolving conflicts
-hunk rebase abort                      # Abort and restore original state
-```
-
-**Action syntax (comma-separated):**
-- `pick:abc123` - Keep commit as-is
-- `squash:abc123` - Combine with previous (concat messages)
-- `fixup:abc123` - Combine with previous (discard message)
-- `drop:abc123` - Remove commit from history
-- `reword:abc123:New message` - Change commit message
-- `exec:make test` - Run command after previous commit
-
-**Common patterns:**
-```bash
-# Squash last 2 commits into one
-hunk rebase list --onto main --json           # Get commit hashes
-hunk rebase run --onto main "pick:abc123,squash:def456"
-
-# Drop a debug/temporary commit from history
-hunk rebase run --onto main "pick:abc123,drop:debug1,pick:ghi789"
-
-# Run tests after each commit to verify history is clean
-hunk rebase run --onto main "pick:abc123,exec:go test ./...,pick:def456,exec:go test ./..."
-
-# Reword a commit message
-hunk rebase run --onto main "pick:abc123,reword:def456:fix: correct nil check in handshake"
-
-# Squash multiple fixup commits into their targets
-hunk rebase run --onto main "pick:feat1,fixup:typo1,pick:feat2,fixup:typo2"
-```
-
-**Auto-squash** (preferred for fixup commits):
-```bash
-hunk rebase autosquash --onto main              # Squash all fixup!/squash! commits
-hunk rebase autosquash --onto main --dry-run    # Preview what would be squashed
-```
-
-Create fixups with `git commit --fixup=<sha>`, then auto-squash.
-
-**Conflict handling:**
-```bash
-hunk rebase status                  # Check for conflicts
-# Resolve conflicts manually, then:
-git add <resolved-files>
-hunk rebase continue
-# Or abort:
-hunk rebase abort
-```
-
-**Best practices:**
-- Always `hunk rebase list --onto <base> --json` first to get exact hashes.
-- Prefer `autosquash` over manual `run` when squashing fixups.
-- Use fixup (not squash) when you want to silently fold in typo fixes.
-- Run `hunk rebase status` after run to verify completion.
-
-# Task Completion Integrity (CRITICAL)
-
-**NEVER mark a task as complete prematurely.** A task is only complete when ALL acceptance criteria are met and the work is fully verified.
-
-**Before marking any task complete:**
-1. Verify ALL acceptance criteria are satisfied
-2. Ensure tests pass (if applicable)
-3. Confirm the feature/fix works end-to-end
-4. Do NOT mark complete just to bypass stop hooks or other blockers
-
-**If a stop hook or blocker prevents you from stopping:**
-- This is by design - complete the remaining work
-- Ask the user if you're unsure what remains
-- NEVER mark tasks complete just to satisfy hook requirements
-
-**If you cannot complete a task:**
-- Leave it as `in_progress` or `pending`
-- Log what remains with `/session-log --progress "Partial: ..."`
-- Ask the user for guidance
-
-# Session Management
-Sessions provide execution continuity across context compactions and work periods.
-See `~/.claude/SESSIONS.md` for full documentation.
-
-## Automatic Session Logging (MANDATORY)
-
-When a session is active (`.sessions/active/` has files), you MUST log at these moments:
-
-### Log Triggers (When to Log)
-
-**1. Key component finished / Bug milestone** → `--progress`
-```
-/session-log --progress "Implemented validateTx in chain.go:145-180"
-```
-
-**2. New information learned** → `--discovery`
-```
-/session-log --discovery "channeldb uses big-endian for keys, not little-endian"
-```
-
-**3. Decision made** → `--decision`
-```
-/session-log --decision "Using mutex over channel" --rationale="simpler, no concurrent readers"
-```
-
-**4. Blocked** → `--blocker`
-```
-/session-log --blocker "Need to know: should this return error or panic?"
-```
-
-### Quick Reference
-```
-/session-log --progress "What you completed"
-/session-log --discovery "What you learned"
-/session-log --decision "Choice" --rationale="Why"
-/session-log --blocker "What's stopping you"
-```
-
-### When to Checkpoint
-Run `/session-checkpoint` after:
-- Completing a major milestone
-- Before risky changes
-- After 5+ log entries
-- Every 30-45 min of active work
-
-## Command Reference
-- `/session-init` - Start new session (user runs this)
-- `/session-resume` - Continue after compaction
-- `/session-log` - YOU run this proactively during work
-- `/session-checkpoint` - YOU run this to save state
-- `/session-view` - Check current session state
-- `/session-pause` - Pause session (user runs this)
-- `/session-close --complete` - Complete session (user runs this)
 
 # ast-grep for Code Search and Style
 
@@ -333,158 +139,63 @@ Run `/session-checkpoint` after:
 - Find error returns: `sg run -p 'return $ERR' -l go`
 - Find struct literals: `sg run -p '&$TYPE{$$$FIELDS}' -l go`
 
-# Subtrate - Agent Command Center
+# Hunk for Line-Level Staging and Rebase
 
-Subtrate provides mail/messaging between Claude Code agents with automatic identity management and lifecycle hooks. **Subtrate is the primary way to communicate with the user** -- when you need to reach the user or send status updates, use Subtrate mail rather than just printing to the console.
+Hunk gives line-level git staging and non-interactive rebase, built for agents
+that know exactly which lines they changed. Use it for atomic commits carved
+out of a larger diff, or to squash/drop/reorder/reword commits without
+interactive prompts. Full command reference, syntax, and worked examples live
+in the `hunk` skill, read it before a staging or rebase task rather than
+guessing the flags.
 
-## Quick Start - Use the /substrate Skill
+# Reviewing Finished Work
 
-The easiest way to use Subtrate is via the `/substrate` skill:
+Before opening a PR, get an independent look at the diff. Two options, pick whichever fits:
+
+- **Substrate review** - `substrate review request --session-id "$CLAUDE_SESSION_ID"`
+  spawns a reviewer agent against the current branch/PR; check back with
+  `review status`/`review issues`, address findings, then `review resubmit`.
+  Use `--type security`/`--type performance`/`--type architecture` when the
+  change touches that surface specifically.
+- **Background review agent** - spawn a `code-reviewer` agent (or the
+  `review-loop` skill for a full adversarial review-fix-verify cycle) as a
+  background task once the work is done, and fold in what it finds.
+
+# Session Management
+
+Sessions provide execution continuity across context compactions and work
+periods. See `~/.claude/SESSIONS.md` for full documentation.
+
+When a session is active (`.sessions/active/` has files), you must log at
+these moments as you work:
+
 ```
-/substrate inbox           # Check your messages
-/substrate status          # Show mail counts
-/substrate send AgentName  # Send a message
-```
-
-The skill handles session ID and formatting automatically.
-
-## CLI Commands Reference
-
-**IMPORTANT**: Always pass `--session-id "$CLAUDE_SESSION_ID"` to CLI commands, or they will fail with "no agent specified".
-
-| Command | Description | Example |
-|---------|-------------|---------|
-| `inbox` | List inbox messages | `substrate inbox --session-id "$CLAUDE_SESSION_ID"` |
-| `read <id>` | Read a specific message | `substrate read 42 --session-id "$CLAUDE_SESSION_ID"` |
-| `send` | Send a new message | `substrate send --session-id "$CLAUDE_SESSION_ID" --to User --subject "Hi" --body "..."` |
-| `status` | Show mail counts | `substrate status --session-id "$CLAUDE_SESSION_ID"` |
-| `poll` | Wait for new messages | `substrate poll --session-id "$CLAUDE_SESSION_ID" --wait=30s` |
-| `heartbeat` | Send liveness signal | `substrate heartbeat --session-id "$CLAUDE_SESSION_ID"` |
-| `identity current` | Show your agent name | `substrate identity current --session-id "$CLAUDE_SESSION_ID"` |
-| `review request` | Request code review | `substrate review request --session-id "$CLAUDE_SESSION_ID"` |
-| `review status <id>` | Show review status | `substrate review status abc --session-id "$CLAUDE_SESSION_ID"` |
-| `review list` | List reviews | `substrate review list --session-id "$CLAUDE_SESSION_ID"` |
-| `review issues <id>` | List review issues | `substrate review issues abc --session-id "$CLAUDE_SESSION_ID"` |
-| `review resubmit <id>` | Resubmit after fixes | `substrate review resubmit abc --session-id "$CLAUDE_SESSION_ID"` |
-| `review cancel <id>` | Cancel review | `substrate review cancel abc --session-id "$CLAUDE_SESSION_ID"` |
-| `agent discover` | Discover agents with filters | `substrate agent discover --session-id "$CLAUDE_SESSION_ID" --status active` |
-| `send-diff` | Send git diff as message | `substrate send-diff --session-id "$CLAUDE_SESSION_ID" --to User` |
-| `plan submit` | Submit plan for review | `substrate plan submit --session-id "$CLAUDE_SESSION_ID"` |
-| `plan approve <id>` | Approve a plan | `substrate plan approve abc --session-id "$CLAUDE_SESSION_ID"` |
-| `plan reject <id>` | Reject a plan | `substrate plan reject abc --session-id "$CLAUDE_SESSION_ID"` |
-
-**There is NO `reply` command** - to reply, use `send` with the sender as recipient:
-```bash
-# Read message #42 from AgentX, then reply:
-substrate send --session-id "$CLAUDE_SESSION_ID" \
-  --to AgentX \
-  --subject "Re: Original Subject" \
-  --body "Your reply here..."
+/session-log --progress "What you completed"
+/session-log --discovery "What you learned"
+/session-log --decision "Choice" --rationale="Why"
+/session-log --blocker "What's stopping you"
 ```
 
-## Setup
+Run `/session-checkpoint` after a major milestone, before risky changes, after
+5+ log entries, or every 30-45 min of active work.
 
-```bash
-# Check if hooks are installed
-substrate hooks status
+Commands: `/session-init` (user starts) - `/session-resume` (you, immediately
+after compaction) - `/session-log` / `/session-checkpoint` (you, proactively) -
+`/session-view` (check state) - `/session-pause` / `/session-close --complete`
+(user ends).
 
-# Install hooks (idempotent - safe to run multiple times)
-substrate hooks install
-```
+# Subtrate
 
-No manual identity setup needed - your agent identity is auto-created on first use and persists across sessions and compactions.
+Subtrate is how you talk to the user and other agents outside a blocking
+prompt: async mail, status updates, code review requests. Use the
+`/substrate` skill for the CLI (`inbox`, `status`, `send`, `review request`,
+etc.) rather than memorizing flags here.
 
-## What the Hooks Do
-
-| Hook | Behavior |
-|------|----------|
-| **SessionStart** | Heartbeat + inject unread messages as context |
-| **UserPromptSubmit** | Silent heartbeat + check for new mail |
-| **Stop** | Long-poll 9m30s, always block to keep agent alive (Ctrl+C to force exit) |
-| **SubagentStop** | Block once if messages exist, then allow exit |
-| **PreCompact** | Save identity for restoration after compaction |
-| **Notification** | Send mail to User on permission prompts and notifications |
-
-The Stop hook keeps your agent alive indefinitely, checking for work from other agents. Press **Ctrl+C** to force exit.
-
-## When Stop Hook Shows Mail (ACTION REQUIRED)
-
-**CRITICAL**: When the stop hook blocks with "You have X unread messages", you MUST:
-
-1. **Read your mail immediately**:
-   ```bash
-   substrate inbox --session-id "$CLAUDE_SESSION_ID"
-   ```
-
-2. **Process each message** - read the full content with `substrate read <id> --session-id "$CLAUDE_SESSION_ID"`
-
-3. **Respond or act** on what's requested in the messages
-
-4. **Only then** should you wait for the next user request
-
-**DO NOT** just say "Standing by" or "Ready" when you have mail - this ignores messages from other agents who need your help!
-
-**Example flow when stop hook shows mail:**
-```
-Stop hook: "You have 1 unread message from AgentX"
-→ Run: substrate inbox --session-id "$CLAUDE_SESSION_ID"
-→ Run: substrate read 42 --session-id "$CLAUDE_SESSION_ID"
-→ Process the request in the message
-→ Reply if needed: substrate send --session-id "$CLAUDE_SESSION_ID" --to AgentX --subject "Re: ..." --body "Done!"
-```
-
-## Agent Message Context (IMPORTANT)
-
-When sending messages via Subtrate, **ALWAYS** include a brief context intro so recipients understand your situation:
-
-**Format:**
-```
-[Context: Working on <project> in <directory>, branch: <branch>]
-[Current task: <brief description of what you're doing>]
-
-<actual message body>
-```
-
-**Example:**
-```
-[Context: Working on subtrate in ~/gocode/src/github.com/roasbeef/subtrate, branch: main]
-[Current task: Implementing gRPC integration tests]
-
-Hi, I need help with the test harness setup. The embedded server starts
-correctly but I'm not sure how to configure the notification hub...
-```
-
-**Why this matters:**
-- Recipients see multiple agents across different projects
-- Context helps them understand your situation without asking
-- Makes replies more relevant and helpful
-- Essential for async communication between agents
-
-**Include in your context:**
-- Project name and directory
-- Current git branch
-- What task or goal you're working on
-- Any relevant blockers or decisions needed
-
-## Sending Diffs to the User
-
-After making commits, **send a diff to the User** so they can see actual code
-changes with syntax highlighting in the web UI:
-
-```bash
-substrate send-diff --session-id "$CLAUDE_SESSION_ID" --to User --base main
-```
-
-**When to send diffs:**
-- After making commits on a feature branch (before or after opening a PR)
-- After addressing review feedback with fixup commits
-- When you want the user to see what changed without them having to check git
-
-The command auto-detects the current branch, computes a diff against the base
-branch (main/master), and sends a message with the diff rendered in the web UI.
-
-**Flags:**
-- `--to` — Recipient (default: User)
-- `--base` — Base branch to diff against (auto-detects main/master)
-- `--repo` — Repository path (default: current directory)
-- `--subject` — Custom subject (default: auto-generated from branch + stats)
+Gotchas that aren't obvious from `--help`:
+- Every CLI call needs `--session-id "$CLAUDE_SESSION_ID"` or it fails with "no agent specified."
+- There is no `reply` command - reply by `send`-ing to the original sender.
+- When the Stop hook blocks with unread mail, read and act on it before doing
+  anything else; don't just say "standing by."
+- After making commits on a feature branch, `substrate send-diff --session-id
+  "$CLAUDE_SESSION_ID" --to User --base main` sends the diff to the user with
+  syntax highlighting in the web UI.
