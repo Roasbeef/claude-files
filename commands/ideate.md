@@ -13,7 +13,7 @@ Transform rough ideas into detailed implementation plans through structured inte
 First, parse the input arguments: $ARGUMENTS
 
 **Input Type Detection:**
-1. If input starts with `@` → file path (content already loaded via @$1 syntax)
+1. If input starts with `@` → file path (content already loaded via @\$1 syntax)
 2. If input matches issue pattern → GitHub issue:
    - `#123` or `123` (bare number)
    - `owner/repo#123`

@@ -72,9 +72,11 @@ Tier is chosen per invocation: Opus 4.8 by default (half of Fable's cost, still 
 
 ### The shape
 
-A high-intelligence planner (Opus/Fable) decomposes the task into independent work items; a fleet of **Sonnet 5** workers does the token-heavy execution in parallel; a thin synthesis pass stitches the results. Most tokens are generated at the worker rate. The `Workflow` tool maps almost 1:1 — it takes a per-agent `model` override — so the command is mostly about setting tiers and keeping the expensive stages thin.
+A high-intelligence planner (Opus/Fable) decomposes the task into independent work items; a fleet of **Sonnet 5** workers does the token-heavy execution in parallel; a thin synthesis pass stitches the results. Most tokens are generated at the worker rate. The `Workflow` tool maps almost 1:1 — it takes a per-agent `model` override — so the skill is mostly about setting tiers and keeping the expensive stages thin.
 
 Unlike `/advisor`, this works from **any main-loop model**, because it keeps the expensive model scarce by construction (one planning pass, one synthesis pass) regardless of what the session runs on.
+
+`/orchestrate` is a **skill** (`skills/orchestrate/SKILL.md`), not a command, and specifically sets `disable-model-invocation: true` — the model cannot auto-trigger an expensive planner from a description match; it only runs on an explicit `/orchestrate` or an explicit `Skill` call by name. That gate matters because orchestrate spends real tokens the moment it runs, unlike `/advisor`'s cheap, read-mostly judgment calls. (Commands and skills turned out to share one invocation surface — both are callable via the `Skill` tool — so the reason for this being a skill isn't invocability, it's that `disable-model-invocation` is skill-only frontmatter.) The actual Plan→Execute→Synthesize logic lives in a bundled template, `skills/orchestrate/workflow/orchestrate.js`, invoked via `Workflow({ scriptPath, args })` rather than hand-authored per call — matching the shape `skills/review-loop` and `skills/ci-loop` already use for their own Workflow-backed loops. An in-instance `Task`-dispatch fallback is documented in the skill for when the `Workflow` tool is unavailable.
 
 ### The rule that matters
 
@@ -107,3 +109,4 @@ They compose: an `/orchestrate` planner can itself lean on `/advisor` judgment, 
 - **Subscription vs API.** On a Max plan the "executor rate" isn't literal dollars, but the same logic governs your rate-limit and context budget. On API it's real money.
 - **Workflows are opt-in scale.** `/orchestrate` can spawn many agents. Use it when the task genuinely decomposes; for a single-thread task the fan-out is pure overhead.
 - **`second-opinion` / codex MCP** is a real external advisor, but a different provider — a fit for "sanity-check with an outside model," not for same-family cost arbitrage.
+- **Literal `$5`/`$25`-style dollar amounts in skill/command prose get silently corrupted.** Claude Code substitutes `$N` (0-indexed) with the Nth whitespace-split word of the invocation args, and `$ARGUMENTS` with the whole arg string; an out-of-range `$N` is replaced with empty string, and an in-range one splices in an unrelated word — confirmed live by invoking `/orchestrate` with a multi-word argument and watching `$1/$5` become a fragment of the task description. `${...}` (braced) is unaffected. Escape any literal `$<digit>` as `\$5`, or rephrase to avoid the pattern (`5 USD`).

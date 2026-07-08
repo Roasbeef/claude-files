@@ -38,8 +38,8 @@ Do **not** consult for: things you can verify by reading the code, routine edits
 
 Parse `--tier=opus|fable` from arguments. If absent, choose by difficulty and say which you picked:
 
-- **`opus` (Opus 4.8, $5/$25 per 1M in/out)** — the default. Half of Fable's cost, still a large jump over a Sonnet executor. Right for most consults.
-- **`fable` (Fable 5, $10/$50)** — Anthropic's most capable model. Reserve for the hardest, highest-stakes questions where Opus itself might be the thing you're unsure of.
+- **`opus` (Opus 4.8, \$5/\$25 per 1M in/out)** — the default. Half of Fable's cost, still a large jump over a Sonnet executor. Right for most consults.
+- **`fable` (Fable 5, \$10/\$50)** — Anthropic's most capable model. Reserve for the hardest, highest-stakes questions where Opus itself might be the thing you're unsure of.
 
 If the choice is genuinely unclear and the stakes are high, ask with `AskUserQuestion`; otherwise pick and note it in one line.
 
