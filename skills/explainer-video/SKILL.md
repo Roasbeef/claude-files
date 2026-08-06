@@ -42,7 +42,12 @@ touching anything; target ~80% confidence:
 3. **VO route** — **A:** user records (~20 min, authentic) or **B:** ElevenLabs
    TTS (instant, re-generatable while the script is still moving).
    Recommend B for the first render, swap A in later — the graphics don't care.
-   If B: confirm `ELEVENLABS_API_KEY` and optional voice preference.
+   If B: confirm `ELEVENLABS_API_KEY`, then **audition the voice before
+   committing**: generate one script line in 2–3 candidate voices
+   (`vo/samples/*.mp3`), have the user `afplay` them, and pick via
+   AskUserQuestion. A voice change after scenes are built forces a full
+   re-cue of every scene (see Iterating below), so this cheap step earns
+   its round-trip.
 4. **Design system source** — a product screenshot to derive from beats an
    invented look every time. Ask for one. Extract: palette, type rules (mono
    for numerics is a strong default), signature components worth rebuilding
@@ -116,6 +121,11 @@ One agent per scene (`parallel`, one phase). Each agent:
 
 - owns exactly one file, `src/scenes/SceneN.tsx`, keeps the propless
   `React.FC` export;
+- keeps **every beat frame in one cue table** (a single const object at the
+  top of the file, one named entry per narration word/phrase) and derives all
+  other timing (fade-outs, sequence durations) from those entries — never as
+  free-floating literals. This is what makes a later VO/voice swap a
+  mechanical retime instead of an archaeology dig;
 - reads `production.md`, `script.md`, its transcript JSON, `anim.tsx`,
   the shared components;
 - gets its frame budget (VO duration + ~0.9s tail) and a concrete visual
@@ -147,9 +157,33 @@ then commit.
 
 ## Iterating after v1
 
-- New VO (e.g. the user records route A): drop files in `vo/`, re-run
-  Phase 2, update durations in `FinalEdit.tsx`/`Root.tsx`, re-render. Scene
-  internals only shift if wording changed enough to move the cue words.
+**Always `git tag v1` (v2, …) before starting a revision** — stakeholders ask
+for the old cut back more often than you'd think.
+
+- **Voice or narrator swap** — this re-times *every word*, not just the
+  changed scenes. Full pipeline re-run (VO → transcripts → durations), then
+  fan out one **re-cue agent per scene** with a hard constraint in the
+  prompt: *"the visual design is APPROVED — do not redesign, restyle, or
+  restructure; only retime beat constants to the new transcript."* Scenes
+  built with a proper cue table retime in minutes. Have each agent also
+  check its **tail behavior**: when the new slot runs longer, a retimed
+  exit can leave seconds of dead black — hold the final composition to the
+  cut instead.
+- **Stakeholder feedback round** — treat it as a mini Phase 0:
+  1. *Research before asking.* If the new direction needs facts or stats,
+     gather verifiable ones first (web search) so the clarifying questions
+     present real options, not placeholders.
+  2. *Ask with previews.* Batch the questions via AskUserQuestion and give
+     concrete ASCII mockups of the competing visual treatments — a picked
+     preview doubles as the scene brief.
+  3. *Scope each scene* as re-cue (design approved) vs rebuild (new story),
+     and run them as one parallel workflow with per-scene prompts.
+- **On-screen claims rule**: sizzle stats must be independently verifiable
+  and carry their source in the frame (e.g. "River Lightning Report, Feb
+  2026"). Round numbers age; sourced numbers survive review.
+- **Watch runtime creep**: new lines + per-scene pads add up — recheck total
+  against the target right after VO regen (TTS reads ~10% faster than the
+  140wpm estimate, but feedback rounds usually *add* words).
 - "Make it snappier / calmer": edit `anim.tsx` only.
-- Script wording changes: regenerate that scene's VO + transcript, then ask
-  that scene's agent (or edit directly) to re-cue the affected beats.
+- Script wording changes in one scene: regenerate that scene's VO +
+  transcript, re-cue just the affected beats, update that scene's duration.
