@@ -10,9 +10,34 @@ Style: The Thinking Person's Guide to Writing in the 21st Century* (2014). The
 whole book reduces to one image and one cause, with four sets of consequences.
 
 Use this when **drafting** prose (write it right the first time) or **revising**
-prose (run the revision pass at the bottom). The reference files under
-`references/` hold the dense tables and examples; load the one you need when a
-section says so.
+prose (run the revision pass at the bottom).
+
+## Required first step: read every reference file
+
+This file is only the map. The substance of the skill — the decision rules, the
+tables, and the worked before/after rewrites you will actually apply — lives in
+the reference files. **Before drafting or revising a single sentence, Read all
+six**, in one batch of parallel Read calls:
+
+1. `references/classic-style.md` — the window metaphor in full; the taxonomy of
+   styles and when classic style may be broken
+2. `references/curse-of-knowledge.md` — the blind-spot mechanics; the external
+   debugging methods
+3. `references/coherence.md` — the coherence-relation table, connectives, and
+   rewrites
+4. `references/syntax.md` — garden paths, end-weight, center-embedding, with
+   examples
+5. `references/mechanics.md` — the passive decision rule, the officialese
+   substitution table, punctuation as a parsing aid
+6. `references/usage.md` — the myth-bust table and the real-rules table
+
+They total about 1,100 lines, so reading all of them is cheap — and skipping
+any of them is the known failure mode of this skill. The section summaries
+below compress each file to a few bullets: enough to navigate, not enough to
+apply. An edit made from a summary alone (auto-converting every passive,
+stripping every hedge, "fixing" a usage superstition) is exactly the mechanical
+misapplication the references exist to prevent. Do not write or edit any prose
+until all six files are in context.
 
 ## The one image: prose is a window onto the world
 
@@ -143,7 +168,9 @@ distracting the reader). Full myth-bust and real-rules tables:
 
 ## The revision pass
 
-When revising existing prose, run these in order. Each maps to a reference file.
+When revising existing prose, run these in order. Each maps to a reference file
+you have already read in full (see "Required first step" above); if any of the
+six is not in context, stop and Read it before continuing.
 
 1. **Window check (whole draft).** Where does the prose point at itself, the
    writer's caution, or an abstraction instead of the world? Cut metadiscourse
