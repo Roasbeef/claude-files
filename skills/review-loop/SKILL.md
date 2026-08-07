@@ -46,6 +46,26 @@ encodes fan-out, triage, apply, loop, and verify as code that cannot drift or
 cut corners. The in-instance path below is the fallback when the `Workflow`
 tool is unavailable or the user passes `--inline`.
 
+### The four phases are mandatory — do not author a report-only variant
+
+This skill runs **Find → Triage → Apply → Verify**, every invocation, in every
+profile. You may adapt the lens set, the `cutoff`, the `profile`, and the number
+of verify slices. You may NOT drop a phase. In particular:
+
+- **Triage** is what makes auto-apply safe (verify-and-reject before fixing) and
+  is a *separate* agent from the finders, which is what defeats self-preferential
+  bias. Skipping it turns adversarial noise into applied changes.
+- **Apply** is the entire point: this loop *fixes*, it does not just report.
+
+**Anti-pattern (do not do this):** authoring an ad-hoc workflow named like
+`review-loop` whose phases are `Review → Verify → Synthesize` (or any
+gather-then-write-a-report shape with no Triage and no Apply). That is a
+**report-only** review — it produces findings but applies nothing. If a
+report is all that's wanted, use `/code-review`; do not rebuild it under the
+review-loop name. The bundled `workflow/review-loop.js` is the canonical
+harness — prefer running it (adapted via `args`) over writing a new script. If
+you do adapt the script, keep the `Find/Triage/Apply/Verify` phases intact.
+
 ## Phase 0: Scope, baseline, and design brief (always done by the main loop)
 
 Do this in the first turn, before any dispatch, regardless of execution path.
@@ -99,8 +119,11 @@ Do this in the first turn, before any dispatch, regardless of execution path.
 
 When the `Workflow` tool is available and `--inline` was not passed, run the
 loop as a deterministic harness. The bundled script
-`workflow/review-loop.js` is a **template** — adapt it to the run (the chosen
-lens set, cutoff, and max-iters), do not assume it must run verbatim.
+`workflow/review-loop.js` is a **template** — adapt the *parameters* to the run
+(the lens set, cutoff, profile, max-iters), preferably by passing `args` rather
+than rewriting the script. If you do edit the script, the `Find/Triage/Apply/
+Verify` phases stay intact (see the mandatory-phases rule above) — adapt what
+runs inside a phase, never which phases run.
 
 > **Template pitfall (read before editing the script):** `meta` must be a
 > **pure literal**. No string concatenation, no template interpolation, no
