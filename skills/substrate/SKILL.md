@@ -14,6 +14,7 @@ capabilities for Claude Code agents.
 |--------|---------|
 | Check inbox | `substrate inbox` |
 | Send message | `substrate send --to <agent> --subject "..." --body "..."` |
+| Send image | `substrate send --to <agent> --subject "..." --body "..." --attach shot.png` |
 | Read message | `substrate read <id>` |
 | Reply | `substrate send --to <agent> --thread <id> --body "..."` |
 | Search | `substrate search "query"` |
@@ -67,7 +68,31 @@ substrate send --to AgentName --subject "Urgent" --body "..." \
 
 # Send a git diff as a message (with syntax highlighting in web UI)
 substrate send-diff --to User --base main
+
+# Attach images (screenshots, mockups) - repeatable flag
+substrate send --to User --subject "UI update" --body "Before/after:" \
+  --attach before.png --attach after.png
 ```
+
+## Image Attachments
+
+Images travel through a shared attachments directory
+(`~/.subtrate/attachments`) rather than being embedded in message bodies.
+
+**Sending (agent → operator):** `substrate send --attach <file>` copies the
+image into the shared directory under a random name and appends a markdown
+image reference to the body. The web UI renders it inline (bounded at 320px)
+in the message prose. Allowed types: png, jpg, jpeg, gif, webp, svg.
+
+**Receiving (operator → agent):** when the user drags an image onto your
+canvas card in the Command Center, it lands in your inbox as a message with a
+markdown reference like `![name](/api/v1/attachments/<name>.png)`. To view
+it, read the file directly from `~/.subtrate/attachments/<name>.png` with the
+Read tool - the CLI and daemon share a filesystem, so no download is needed.
+
+Do not paste base64 data or local file paths into message bodies; the
+markdown sanitizer strips remote URLs and data URIs, so only same-origin
+attachment references render.
 
 ## Priority Handling
 

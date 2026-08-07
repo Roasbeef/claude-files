@@ -199,3 +199,8 @@ Gotchas that aren't obvious from `--help`:
 - After making commits on a feature branch, `substrate send-diff --session-id
   "$CLAUDE_SESSION_ID" --to User --base main` sends the diff to the user with
   syntax highlighting in the web UI.
+- To send an image (screenshot, mockup, chart), use `substrate send --attach
+  shot.png` - it stages the file in the shared attachments dir and embeds a
+  markdown reference that renders inline in the web UI. Never paste base64 or
+  file paths into the body. Images the user drops on your canvas card arrive
+  as inbox messages with the same markdown reference.
