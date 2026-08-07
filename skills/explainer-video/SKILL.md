@@ -86,6 +86,11 @@ the contract every downstream agent reads.
 - One `.txt` per scene from the script's narration (blockquotes only, not
   stage directions). **Spell out tickers/initialisms phonetically** for TTS
   ("P-S-B-T", "L-N-D") — the graphics show the real spelling.
+- **Sweep the script for heteronyms before generating** — words whose
+  pronunciation depends on part of speech: *invalid* (adjective) vs *invalid*
+  (noun), *live*, *record*, *present*, *content*, *object*, *produce*. TTS
+  guesses wrong often enough to matter; reword the sentence (e.g. "render it
+  invalid" → "invalidate it") rather than fighting the model.
 - Generate via the ElevenLabs API in a re-runnable `vo/generate.sh`: for each
   scene, `jq -Rs '{text: ., model_id: "eleven_multilingual_v2", voice_settings:
   {stability: 0.5, similarity_boost: 0.75, style: 0.25}}' < vo/sceneN.txt`
@@ -185,5 +190,15 @@ for the old cut back more often than you'd think.
   against the target right after VO regen (TTS reads ~10% faster than the
   140wpm estimate, but feedback rounds usually *add* words).
 - "Make it snappier / calmer": edit `anim.tsx` only.
-- Script wording changes in one scene: regenerate that scene's VO +
-  transcript, re-cue just the affected beats, update that scene's duration.
+- Script wording changes in one scene: regenerate **only that scene's** VO +
+  transcript, re-cue all of that scene's beats (the whole audio file is new,
+  so every offset in it moved — but only in that scene), update its duration.
+  **Never re-run the full generate loop for a one-scene change**: TTS output
+  is non-deterministic, so regenerating untouched scenes silently invalidates
+  their cues and costs API credits for nothing. Keep the generate script's
+  loop current, but do targeted regens inline.
+- **Adding a closing scene** (CTA, launch plan, next steps) is the cheapest
+  structural edit: no existing scene re-times — new VO + transcript, a new
+  scene file, one more Series entry in the cue sheet, done. If the video
+  needs a call to action, put the docs/product URL on screen in the final
+  resting frame — it's the last thing the audience sees.
