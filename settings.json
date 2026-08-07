@@ -277,8 +277,10 @@
   "alwaysThinkingEnabled": true,
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
+  "skipWorkflowUsageWarning": true,
   "editorMode": "vim",
   "verbose": true,
+  "agentPushNotifEnabled": true,
   "voiceEnabled": true,
   "feedbackSurveyState": {
     "lastShownTime": 1753983872081
